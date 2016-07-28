@@ -1,0 +1,63 @@
+
+chroot med:
+
+/pkg -- c-binär som håller i byggandet
+/ga/<pkgname>/<pkgversion>/<pkgrelease>/ -- recept
+/rc/<pkgname>/<pkgversion>/<pkgrelease>/
+/cache/<pkg>.rpm
+/log/<pkg>.log
+/tmp -- för bygg chroot
+
+recept:
+-------
+type -- source|binary (source tillåts använda "latest" i deps. samt ges åtkomst till externa nät resurser)
+deps -- dependency list. <pkg> [from <pkg>]. latest <pkg-name> (behövs för src-paket. så de kan hämta på säkert sätt).
+meta -- package metadata values
+rundeps -- runtime dependencies? paketlista som bör ingå i det resulterande paketet. påverkar inte bygget alls.
+build -- main build script/executable
+NNNNN -- other resources used by script
+
+pkg:
+-----
+bygger dependencies först
+skapar ren chroot. endast specifika delar skrivbara ?
+montera /proc och /sys i ny mount namespace (pid också?, uts?). netns för binary. inte netns för source: src-paketen kan behöva hämta källkod
+packar upp dependencies (src-paket, bin-paket)
+kopierar in hela recept-katalogen
+kör "build"
+loggar hela transaktionen
+sparar undan resultatet (<pkg>.rpm) i /cache/
+
+Vilka bootstrap paket behövs:
+- toolchain: libc, lbc++, binutils (as,ld), c-compiler, c++-compiler
+- utils: shell, bar
+- files: behövs /dev/ ? eller kan vi skapa /dev/ utan /dev?
+(vi kan bygga tar utan tar. make utan make)
+
+paket:
+------
+ingen intern kompression. valfri komprimering kan göras av hela paketet.
+
+Record:
+magic version
+meta: 0|<size><name>=<value>
+datasize
+checksum(meta)
+[data]
+checksum(data)
+
+<size> = NUMSIZEBYTES SIZEBYTE1 .. SIZEBYTEN
+
+1st record is package metadata.
+last record is package summary: total checksum, nr records, nr files. Ingen signatur. Signatur hanteras OOB
+NO alignment. No fixed record size.
+
+Stödja dekryptering via public key? Kanske bättre med en separat databas med signade paket?
+<pkg>, <pubkey>, <signature>, <expiration-date> //expiration-date to avoid replay attack
+
+trusted, senior, junior, untrusted
+
+Välja trust nivå. junior till senior efter viss tid som junior. På repo-nivå och per paket-nivå.
+/etc/trust.d/keys/(trusted|senior|junior|untrusted)/<key>
+/etc/trust.d/pkgs/<pkg-signatures-archives> // limit size when updating, to avoid DOS
+

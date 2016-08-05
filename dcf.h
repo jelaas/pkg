@@ -3,18 +3,17 @@
 Data Collection Format
 
 Record:
- char magic[6]
- char collectiontype[4]; /* subtype. parent format that uses DCF */
+ char dcf_magic[6]
+ char collectiontype[4]; Subtype that uses DCF as a container 
  VARINT dcfversion
- VARINT collectionid (same format as for size) This way we can multiplex records from several collections
- meta: (0|<identsize><identifier><contentsize>><content>) /* repeated until identsize is 0 which is last metadata value */
- <datasize>
- char checksum[32] (meta) -- checksum from magic upto and including datasize
+ VARINT collectionid This way we can multiplex records from several collections
+ meta: (0|VARINT <identsize>OCTETS <identifier>VARINT <contentsize>OCTETS <content>)  Repeated until identsize is 0 which marks the end of metadata.
+ VARINT datasize
+ OCTETS checksum[32] (meta) -- SHA256 checksum from magic upto and including datasize
  [data]
- char checksum[32] (data) -- checksum of data
+ OCTETS checksum[32] (data) -- SHA256 checksum of data
 
-<size> = VARINT
-VARINT = NUMSIZEBYTES SIZEBYTE1 .. SIZEBYTEN
+ VARINT = NUMSIZEBYTES SIZEBYTE1 .. SIZEBYTEN
 
  */
 

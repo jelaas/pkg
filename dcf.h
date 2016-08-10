@@ -16,11 +16,12 @@ Record:
  VARINT = NUMSIZEBYTES SIZEBYTE1 .. SIZEBYTEN
 
  */
+#include <sha256.h>
 
 struct dcf {
   int fd;
-  unsigned char sha256[32]; /* initialized by dcf_init and dcf_checksum_read|write */
-  unsigned char sha256cumul[32]; /* initialized by dcf_init */
+  char collectiontype[4];
+  struct sha256_ctx sha256; /* initialized by dcf_init and dcf_checksum_read|write */
 };
 
 #define DCF_MAGIC "%DCF_%"
@@ -37,9 +38,9 @@ int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *data);
 int dcf_checksum_read(struct dcf *dcf);
 
 int dcf_magic_write(struct dcf *dcf);
-int dcf_collectiontype_write(struct dcf *dcf, const char *collectiontype);
+int dcf_collectiontype_write(struct dcf *dcf);
 int dcf_varint_write(struct dcf *dcf, int nvalues, const int *values);
 int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int contentsize, const char *content);
 int dcf_meta_write_final(struct dcf *dcf);
 int dcf_data_write(struct dcf *dcf, const char *buf, int size);
-int dcf_checksum_write(struct dcf *dcf, char *chksum);
+int dcf_checksum_write(struct dcf *dcf, char *chksum); /* copy of checksum also written to chksum */

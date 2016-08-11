@@ -64,6 +64,8 @@
  ctime
  ownername
  groupname
+ uid
+ gid
  size
  devmajor
  devminor

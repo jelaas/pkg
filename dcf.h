@@ -13,7 +13,7 @@ Record:
  [data]
  OCTETS checksum[32] (data) -- SHA256 checksum of data
 
- VARINT = NUMSIZEBYTES SIZEBYTE1 .. SIZEBYTEN
+ VARINT = NUMINTBYTES INTBYTELOW .. INTBYTEHIGH
 
  */
 #include "sha256.h"

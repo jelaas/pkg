@@ -6,7 +6,7 @@ Record:
  char dcf_magic[6]
  char collectiontype[4]; Subtype that uses DCF as a container 
  VARINT dcfversion
- VARINT collectionid This way we can multiplex records from several collections
+ VARINT collectionid This way we can multiplex records from several collections with the same collectiontype
  meta: (0|VARINT identsize, OCTETS identifier, VARINT contentsize, OCTETS content)  Repeated until identsize is 0 which marks the end of metadata.
  VARINT datasize
  OCTETS checksum[32] (meta) -- SHA256 checksum from magic upto and including datasize

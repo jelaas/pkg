@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <limits.h>
 #include "bigint.h"
 
@@ -6,6 +7,24 @@ int bigint_load(struct bigint *b, char *v, int v_len, int negative)
 	b->v = v;
 	b->n = v_len;
 	b->neg = negative;
+	return 0;
+}
+
+int bigint_loadi(struct bigint *b, char *v, int v_len, int intval)
+{
+	int i;
+
+	bigint_load(b, v, v_len, 0);
+	bigint_zero(b);
+	b->neg = intval < 0;
+	intval = abs(intval);
+	
+	for(i=0;i<v_len; i++) {
+		if(i >= v_len) return -1;
+		v[i] = intval & 0xf;
+		intval >>= 4;
+		if(intval == 0) break;
+	}
 	return 0;
 }
 
@@ -18,7 +37,7 @@ int bigint_zero(struct bigint *b)
 	return 0;
 }
 
-static int _bigint_add(struct bigint *res, const struct bigint *i1, const struct bigint *i2)
+static int _bigint_add(struct bigint *res, const struct bigint *i1, const struct bigint *i2, int res_sign)
 {
 	int carry = 0;
 	int i;
@@ -42,6 +61,7 @@ static int _bigint_add(struct bigint *res, const struct bigint *i1, const struct
 		if( i >= res->n) return -1;
 		res->v[i] = carry;
 	}
+	res->neg = res_sign;
 	return 0;
 }
 
@@ -81,7 +101,7 @@ int bigint_sum(struct bigint *res, const struct bigint *i1, const struct bigint 
 	const struct bigint *t;
 
 	if( i1->neg == i2->neg )
-		return _bigint_add(res, i1, i2);
+		return _bigint_add(res, i1, i2, i1->neg);
 
 	{
 		int s;
@@ -152,5 +172,23 @@ int bigint_toint(int *res, const struct bigint *b)
 		*res += b->v[i];
 	}
 	if(b->neg) *res = 0 - *res;
+	return 0;
+}
+
+int bigint_bits(const struct bigint *b)
+{
+	int i, j, t;
+
+	for(i=b->n-1;i>=0;i--) {
+		if(b->v[i]) {
+			int bits = 0;
+			t = b->v[i];
+			for(j=0;j<4;j++) {
+				if(t) bits++;
+				t >>= 1;
+			}
+			return i*4+bits;
+		}
+	}
 	return 0;
 }

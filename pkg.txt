@@ -1,18 +1,20 @@
 
 chroot med:
 
-/pkg -- c-binär som håller i byggandet
+/pkg.<arch> -- c-binär som håller i byggandet
 /ga/<pkgname>/<pkgversion>/<pkgrelease>/ -- recept
 /rc/<pkgname>/<pkgversion>/<pkgrelease>/
 /cache/<pkg>.dcfpkg
 /log/<pkg>.log
 /tmp -- för bygg chroot
+/buildhosts (list of hosts and architectures)
 
 recept:
 -------
 type      -- source|binary (source tillåts använda "latest" i deps. samt ges åtkomst till externa nät resurser)
 builddeps -- dependency list. <pkg> [from <pkg>]. latest <pkg-name> (behövs för src-paket. så de kan hämta på säkert sätt).
 meta      -- package metadata values
+arch      -- cpu architecture. i586|x86_64
 rundeps   -- runtime dependencies? paketlista som bör ingå i det resulterande paketet. påverkar inte bygget alls.
 build     -- main build script/executable (builds and installs in DESTDIR /var/tmp/install)
 filter    -- paths that should NOT be included in the package (ex. common dirs like /etc, they will be created on demand if needed)
@@ -20,6 +22,7 @@ NNNNN     -- other resources used by script
 
 pkg:
 -----
+(möjlighet att använda remote buildhost? för andra arkitekturer, parallellism etc?)
 bygger dependencies först
 skapar ren chroot. endast specifika delar skrivbara ?
 montera /proc och /sys i ny mount namespace (pid också?, uts?). netns för binary. inte netns för source: src-paketen kan behöva hämta källkod

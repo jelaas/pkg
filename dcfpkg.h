@@ -33,7 +33,7 @@
 
  Metadata identifiers used in collection 2
  -----------------------------------------
- - For build specification files.
+ - For build specification files. Scripts, config, changelog, patches etc.
  - Owner unspecified. Only "normal" files.
  - Files should normally have a path in current directory (plain files without directory-structure).
  filepath

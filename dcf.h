@@ -45,4 +45,5 @@ int dcf_varint_write(struct dcf *dcf, struct bigint *i);
 int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int contentsize, const char *content);
 int dcf_meta_write_final(struct dcf *dcf);
 int dcf_data_write(struct dcf *dcf, const char *buf, int size);
+int dcf_data_write_final(struct dcf *dcf);
 int dcf_checksum_write(struct dcf *dcf, char *chksum); /* copy of checksum also written to chksum */

@@ -28,15 +28,36 @@ int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *data);
 int dcf_checksum_read(struct dcf *dcf);
 #endif
 
+static int _dcf_recordsize_inc(struct dcf *dcf, struct bigint *inc)
+{
+	if(bigint_zero(&dcf->temp))
+		return -1;
+	if(bigint_sum(&dcf->temp, &dcf->recordsize, inc))
+		return -1;
+	if(bigint_swap(&dcf->temp, &dcf->recordsize))
+		return -1;
+	return 0;
+}
+
+static int _dcf_recordsize_inci(struct dcf *dcf, int smallint)
+{
+	struct bigint b;
+	char v[4];
+
+	if(bigint_loadi(&b, v, sizeof(v), smallint))
+		return -1;
+	if(_dcf_recordsize_inc(dcf, &b))
+		return -1;
+	return 0;
+}
+
 int dcf_magic_write(struct dcf *dcf)
 {
 	if(write(dcf->fd, DCF_MAGIC, 6) != 6)
 		return -1;
 	sha256_process_bytes(DCF_MAGIC, 6, &dcf->sha256);
-	// bigint_load 6
-	// bigint_loadi 0 (result)
-	// bigint_sum
-	// copy result to recordsize
+	if(_dcf_recordsize_inci(dcf, 6))
+		return -1;
 	return 0;
 }
 
@@ -45,10 +66,12 @@ int dcf_collectiontype_write(struct dcf *dcf)
 	if(write(dcf->fd, dcf->collectiontype, 4) != 4)
 		return -1;
 	sha256_process_bytes(dcf->collectiontype, 4, &dcf->sha256);
+	if(_dcf_recordsize_inci(dcf, 4))
+		return -1;
 	return 0;
 }
 
-int _dcf_varint_size(struct dcf *dcf, struct bigint *b)
+static int _dcf_varint_size(struct dcf *dcf, struct bigint *b)
 {
 	int nibs, bytes;
 	nibs = (bigint_bits(b)+3)/4;
@@ -59,7 +82,7 @@ int _dcf_varint_size(struct dcf *dcf, struct bigint *b)
 
 int dcf_varint_write(struct dcf *dcf, struct bigint *b)
 {
-	int nibs, bytes, i;
+	int nibs, bytes, i, totwritten = 0;
 	unsigned char numbytes[1], buf[1];
 
 	nibs = (bigint_bits(b)+3)/4;
@@ -68,6 +91,7 @@ int dcf_varint_write(struct dcf *dcf, struct bigint *b)
 	if(write(dcf->fd, numbytes, 1) != 1)
                 return -1;
 	sha256_process_bytes(numbytes, 1, &dcf->sha256);
+	totwritten++;
 	for(i=0;i<bytes;i++) {
 		if((i*2+1) >= nibs)
 			buf[0] = 0;
@@ -78,10 +102,14 @@ int dcf_varint_write(struct dcf *dcf, struct bigint *b)
 		if(write(dcf->fd, buf, 1) != 1)
 			return -1;
 		sha256_process_bytes(buf, 1, &dcf->sha256);
+		totwritten++;
 	}
 	if(write(dcf->fd, numbytes, 1) != 1)
                 return -1;
 	sha256_process_bytes(numbytes, 1, &dcf->sha256);
+	totwritten++;
+	if(_dcf_recordsize_inci(dcf, totwritten))
+		return -1;
 	return 0;
 }
 
@@ -96,6 +124,9 @@ int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int conten
 	if(write(dcf->fd, ident, identsize) != identsize)
                 return -1;
 	sha256_process_bytes(ident, identsize, &dcf->sha256);
+	if(_dcf_recordsize_inc(dcf, &b))
+		return -1;
+
 	if(bigint_loadi(&b, v, sizeof(v), contentsize))
 		return -1;
 	if(dcf_varint_write(dcf, &b))
@@ -103,6 +134,9 @@ int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int conten
 	if(write(dcf->fd, content, contentsize) != contentsize)
                 return -1;
 	sha256_process_bytes(content, contentsize, &dcf->sha256);
+	if(_dcf_recordsize_inc(dcf, &b))
+		return -1;
+
 	return 0;
 }
 
@@ -112,6 +146,8 @@ int dcf_meta_write_final(struct dcf *dcf) {
         if(write(dcf->fd, buf, 1) != 1)
                 return -1;
 	sha256_process_bytes(buf, 1, &dcf->sha256);
+	if(_dcf_recordsize_inci(dcf, 1))
+		return -1;
 	return 0;
 }
 
@@ -130,6 +166,9 @@ int dcf_data_write(struct dcf *dcf, const char *buf, int size)
 	if(write(dcf->fd, buf, size) != size)
                 return -1;
         sha256_process_bytes(buf, size, &dcf->sha256);
+	if(_dcf_recordsize_inc(dcf, &b))
+		return -1;
+	
         return 0;
 }
 
@@ -147,24 +186,26 @@ int dcf_checksum_write(struct dcf *dcf, char *chksum)
 		memcpy(chksum, resbuf, SHA256_DIGEST_LENGTH);
 	}
 	sha256_init_ctx(&dcf->sha256);
+	if(_dcf_recordsize_inci(dcf, SHA256_DIGEST_LENGTH))
+		return -1;
 	return 0;
 }
 
 /* writes recordsize and checksum of recordsize */
 int dcf_recordsize_write(struct dcf *dcf, char *chksum)
 {
-	char tail_v[4], rec_v[16]; // FIXME: rec_v should be supplied by _init
+	char tail_v[4];
 	int tailsizei;
-	struct bigint recsize, tailsize;
+	struct bigint tailsize;
 	
 	tailsizei = _dcf_varint_size(dcf, &dcf->recordsize) + SHA256_DIGEST_LENGTH;
 	if(bigint_loadi(&tailsize, tail_v, sizeof(tail_v), tailsizei))
 		return -1;
-	if(bigint_loadi(&recsize, rec_v, sizeof(rec_v), 0))
+	if(bigint_zero(&dcf->temp2))
 		return -1;
-	if(bigint_sum(&recsize, &dcf->recordsize, &tailsize))
+	if(bigint_sum(&dcf->temp2, &dcf->recordsize, &tailsize))
 		return -1;
-	if(dcf_varint_write(dcf, &recsize))
+	if(dcf_varint_write(dcf, &dcf->temp2))
                 return -1;
 	if(dcf_checksum_write(dcf, chksum))
 		return -1;

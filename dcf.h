@@ -11,6 +11,7 @@ Record:
  OCTETS checksum[32] (meta) -- SHA256 checksum from magic upto and including meta
  data: (0|VARINT datasize, OCTETS data). Repeated until datasize is 0 which marks the end of data.
  OCTETS datachecksum[32] (data) -- SHA256 checksum of data
+ signature: (0|VARINT signaturetypesize, OCTETS signaturetype, VARINT signaturesize, OCTETS signature)
  VARINT recordsize. Size of complete record from dcf_magic upto and including recordsizechecksum.
  OCTETS recordsizechecksum[32] (data) -- SHA256 checksum of recordsize
  

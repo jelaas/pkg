@@ -13,7 +13,7 @@ int dcf_init(struct dcf *dcf, int fd, const char *collectiontype, char *v, int v
 		return -1;
 	if(bigint_loadi(&dcf->temp, v+(v_len/3), v_len/3, 0))
 		return -1;
-	if(bigint_loadi(&dcf->temp2, v+(v_len/3)*2, (v_len/3)*2, 0))
+	if(bigint_loadi(&dcf->temp2, v+(v_len/3)*2, v_len/3, 0))
 		return -1;
 	return 0;
 }

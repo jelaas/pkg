@@ -28,6 +28,28 @@ int bigint_loadi(struct bigint *b, char *v, int v_len, int intval)
 	return 0;
 }
 
+/* swap values (and underlaying vectors) of i1 and i2 */
+int bigint_swap(struct bigint *i1, struct bigint *i2)
+{
+	int n, neg;
+	char *v;
+	
+	n = i1->n;
+	v = i1->v;
+	neg = i1->neg;
+
+	i1->n = i2->n;
+	i1->v = i2->v;
+	i1->neg = i2->neg;
+
+	i2->n = n;
+	i2->v = v;
+	i2->neg = neg;
+
+	return 0;
+}
+
+
 int bigint_zero(struct bigint *b)
 {
 	int i;

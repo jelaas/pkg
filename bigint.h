@@ -14,5 +14,6 @@ int bigint_zero(struct bigint *b);
 int bigint_tostr(char *s, int s_len, const struct bigint *);
 int bigint_toint(int *i, const struct bigint *);
 int bigint_bits(const struct bigint *i); /* returns number of bits needed for the integer representation of abs(i) */
+int bigint_swap(struct bigint *i1, struct bigint *i2); /* swap values (and underlaying vectors) of i1 and i2 */
 
 #endif

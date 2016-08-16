@@ -31,7 +31,8 @@ struct dcf {
 #define DCF_MAGIC "%DCF_%"
 #define DCF_VERSION 1
 
-int dcf_init(struct dcf *dcf, int fd, const char *collectiontype, char *workbuf, int workbufsize); /* workbuf must be big enough to handle maximum recordsize of collection times three (64 bytes should be enough) */
+int dcf_init(struct dcf *dcf, int fd, char *workbuf, int workbufsize); /* workbuf must be big enough to handle maximum recordsize of collection times three (64 bytes should be enough) */
+int dcf_collectiontype_set(struct dcf *dcf, const char *collectiontype);
 
 int dcf_magic_read(struct dcf *dcf);
 int dcf_collectiontype_read(struct dcf *dcf);

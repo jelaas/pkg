@@ -3,10 +3,9 @@
 #include "dcf.h"
 #include "bigint.h"
 
-int dcf_init(struct dcf *dcf, int fd, const char *collectiontype, char *v, int v_len)
+int dcf_init(struct dcf *dcf, int fd, char *v, int v_len)
 {
 	dcf->fd = fd;
-	memcpy(dcf->collectiontype, collectiontype, 4);
 	memset(&dcf->sha256, 0, sizeof(dcf->sha256));
 	sha256_init_ctx(&dcf->sha256);
 	if(bigint_loadi(&dcf->recordsize, v, v_len/3, 0))
@@ -15,6 +14,12 @@ int dcf_init(struct dcf *dcf, int fd, const char *collectiontype, char *v, int v
 		return -1;
 	if(bigint_loadi(&dcf->temp2, v+(v_len/3)*2, v_len/3, 0))
 		return -1;
+	return 0;
+}
+
+int dcf_collectiontype_set(struct dcf *dcf, const char *collectiontype)
+{
+	memcpy(dcf->collectiontype, collectiontype, 4);
 	return 0;
 }
 

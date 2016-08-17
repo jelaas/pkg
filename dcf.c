@@ -197,25 +197,27 @@ int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, c
 	char v[16];
 
 	if(sigtypesize == 0)
-		return _dcf_write_zero_cs(dcf, 0);
+		return _dcf_write_zero(dcf);
 	if(sigsize == 0)
 		return -1;
 	
 	if(bigint_loadi(&b, v, sizeof(v), sigtypesize))
 		return -1;
-	if(_dcf_varint_write_cs(dcf, &b, 0))
+	if(dcf_varint_write(dcf, &b))
 		return -1;
 	if(write(dcf->fd, sigtype, sigtypesize) != sigtypesize)
                 return -1;
+        sha256_process_bytes(sigtype, sigtypesize, &dcf->sha256);
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
 	
 	if(bigint_loadi(&b, v, sizeof(v), sigsize))
 		return -1;
-	if(_dcf_varint_write_cs(dcf, &b, 0))
+	if(dcf_varint_write(dcf, &b))
 		return -1;
 	if(write(dcf->fd, sig, sigsize) != sigsize)
                 return -1;
+        sha256_process_bytes(sig, sigsize, &dcf->sha256);
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
 	

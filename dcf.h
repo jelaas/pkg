@@ -50,5 +50,6 @@ int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int conten
 int dcf_meta_write_final(struct dcf *dcf);
 int dcf_data_write(struct dcf *dcf, const char *buf, int size);
 int dcf_data_write_final(struct dcf *dcf);
+int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, const char *sig, int sigsize); /* sigtypesize == 0 means no signature */
 int dcf_checksum_write(struct dcf *dcf, char *chksum); /* copy of checksum also written to chksum */
 int dcf_recordsize_write(struct dcf *dcf, char *chksum); /* writes recordsize and checksum of recordsize. copy of checksum to chksum */

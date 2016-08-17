@@ -85,7 +85,7 @@ static int _dcf_varint_size(struct dcf *dcf, struct bigint *b)
 	return 1 + bytes + 1;
 }
 
-int dcf_varint_write(struct dcf *dcf, struct bigint *b)
+static int _dcf_varint_write_cs(struct dcf *dcf, struct bigint *b, int cs)
 {
 	int nibs, bytes, i, totwritten = 0;
 	unsigned char numbytes[1], buf[1];
@@ -95,7 +95,7 @@ int dcf_varint_write(struct dcf *dcf, struct bigint *b)
 	numbytes[0] = bytes;
 	if(write(dcf->fd, numbytes, 1) != 1)
                 return -1;
-	sha256_process_bytes(numbytes, 1, &dcf->sha256);
+	if(cs) sha256_process_bytes(numbytes, 1, &dcf->sha256);
 	totwritten++;
 	for(i=0;i<bytes;i++) {
 		if((i*2+1) >= nibs)
@@ -106,16 +106,21 @@ int dcf_varint_write(struct dcf *dcf, struct bigint *b)
 		buf[0] += b->v[i*2];
 		if(write(dcf->fd, buf, 1) != 1)
 			return -1;
-		sha256_process_bytes(buf, 1, &dcf->sha256);
+		if(cs) sha256_process_bytes(buf, 1, &dcf->sha256);
 		totwritten++;
 	}
 	if(write(dcf->fd, numbytes, 1) != 1)
                 return -1;
-	sha256_process_bytes(numbytes, 1, &dcf->sha256);
+	if(cs) sha256_process_bytes(numbytes, 1, &dcf->sha256);
 	totwritten++;
 	if(_dcf_recordsize_inci(dcf, totwritten))
 		return -1;
 	return 0;
+}
+
+int dcf_varint_write(struct dcf *dcf, struct bigint *b)
+{
+	return _dcf_varint_write_cs(dcf, b, 1);
 }
 
 int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int contentsize, const char *content)
@@ -145,15 +150,23 @@ int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int conten
 	return 0;
 }
 
-int dcf_meta_write_final(struct dcf *dcf) {
+static int _dcf_write_zero_cs(struct dcf *dcf, int cs) {
 	char buf[1];
 	buf[0] = 0;
         if(write(dcf->fd, buf, 1) != 1)
                 return -1;
-	sha256_process_bytes(buf, 1, &dcf->sha256);
+	if(cs) sha256_process_bytes(buf, 1, &dcf->sha256);
 	if(_dcf_recordsize_inci(dcf, 1))
 		return -1;
 	return 0;
+}
+
+static int _dcf_write_zero(struct dcf *dcf) {
+	return _dcf_write_zero_cs(dcf, 1);
+}
+
+int dcf_meta_write_final(struct dcf *dcf) {
+	return _dcf_write_zero(dcf);
 }
 
 int dcf_data_write(struct dcf *dcf, const char *buf, int size)
@@ -177,8 +190,40 @@ int dcf_data_write(struct dcf *dcf, const char *buf, int size)
         return 0;
 }
 
+/* sigtypesize == 0 means no signature */
+int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, const char *sig, int sigsize)
+{
+	struct bigint b;
+	char v[16];
+
+	if(sigtypesize == 0)
+		return _dcf_write_zero_cs(dcf, 0);
+	if(sigsize == 0)
+		return -1;
+	
+	if(bigint_loadi(&b, v, sizeof(v), sigtypesize))
+		return -1;
+	if(_dcf_varint_write_cs(dcf, &b, 0))
+		return -1;
+	if(write(dcf->fd, sigtype, sigtypesize) != sigtypesize)
+                return -1;
+	if(_dcf_recordsize_inc(dcf, &b))
+		return -1;
+	
+	if(bigint_loadi(&b, v, sizeof(v), sigsize))
+		return -1;
+	if(_dcf_varint_write_cs(dcf, &b, 0))
+		return -1;
+	if(write(dcf->fd, sig, sigsize) != sigsize)
+                return -1;
+	if(_dcf_recordsize_inc(dcf, &b))
+		return -1;
+	
+        return 0;	
+}
+
 int dcf_data_write_final(struct dcf *dcf) {
-	return dcf_meta_write_final(dcf);
+	return _dcf_write_zero(dcf);
 }
 
 int dcf_checksum_write(struct dcf *dcf, char *chksum)

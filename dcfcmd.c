@@ -52,6 +52,8 @@ int append(struct dcf *dcf)
 		return -1;
 	if(dcf_checksum_write(dcf, (void*)0))
 		return -1;
+	if(dcf_signature_write(dcf, "sigge", 5, "STARDUST", 8))
+		return -1;
 	if(dcf_recordsize_write(dcf, (void*)0))
 		return -1;
 	

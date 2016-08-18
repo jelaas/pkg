@@ -7,11 +7,11 @@ Record:
  char collectiontype[4]; Subtype that uses DCF as a container 
  VARINT dcfversion
  VARINT collectionid This way we can multiplex records from several collections with the same collectiontype
- meta: (0|VARINT identsize, OCTETS identifier, VARINT contentsize, OCTETS content)  Repeated until identsize is 0 which marks the end of metadata.
+ meta: (VARINT 0|VARINT identsize, OCTETS identifier, VARINT contentsize, OCTETS content)  Repeated until identsize or contentsize is 0 which marks the end of metadata.
  OCTETS checksum[32] (meta) -- SHA256 checksum from magic upto and including meta
- data: (0|VARINT datasize, OCTETS data). Repeated until datasize is 0 which marks the end of data.
- signature: (0|VARINT signaturetypesize, OCTETS signaturetype, VARINT signaturesize, OCTETS signature)
- OCTETS datachecksum[32] (data) -- SHA256 checksum of data
+ data: (VARINT 0|VARINT datasize, OCTETS data). Repeated until datasize is 0 which marks the end of data.
+ signature: (VARINT 0|VARINT signaturetypesize, OCTETS signaturetype, VARINT signaturesize, OCTETS signature)
+ OCTETS datachecksum[32] (data) -- SHA256 checksum of 'data' and 'signature' sections
  VARINT recordsize. Size of complete record from dcf_magic upto and including recordsizechecksum.
  OCTETS recordsizechecksum[32] (data) -- SHA256 checksum of recordsize
  
@@ -39,9 +39,11 @@ int dcf_magic_read(struct dcf *dcf);
 int dcf_collectiontype_read(struct dcf *dcf);
 int dcf_varint_size_read(struct dcf *dcf); /* returns number bytes in varint */
 int dcf_varint_value_read(struct dcf *dcf, struct bigint *i);
-int dcf_meta_data_read(struct dcf *dcf, int datasize, unsigned char *data);
-int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *data);
-int dcf_checksum_read(struct dcf *dcf);
+int dcf_meta_data_read(struct dcf *dcf, int *datasize, int bufsize, char *buf); /* 0 ok. 1 = end-of-meta-data. < 0 on error */
+int dcf_data_read(struct dcf *dcf, int *datasize, int bufsize, unsigned char *buf); /* 0 ok. 1 = end-of-data. < 0 on error */
+int dcf_signature_read(struct dcf *dcf, int * typesize, int *sigsize, int typebufsize, char *typebuf, int sigbufsize, unsigned char *sigbuf); /* 0 ok. 1 = no-signature. < 0 on error */
+int dcf_checksum_read(struct dcf *dcf); /* reads and checks checksum */
+int dcf_recordsize_read(struct dcf *dcf, char *chksum); /* reads and checks recordsize and checksum of recordsize */
 
 int dcf_magic_write(struct dcf *dcf);
 int dcf_collectiontype_write(struct dcf *dcf);

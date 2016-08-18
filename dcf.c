@@ -151,12 +151,13 @@ int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int conten
 }
 
 static int _dcf_write_zero_cs(struct dcf *dcf, int cs) {
-	char buf[1];
+	char buf[2];
 	buf[0] = 0;
-        if(write(dcf->fd, buf, 1) != 1)
+	buf[1] = 0;
+        if(write(dcf->fd, buf, 2) != 1)
                 return -1;
-	if(cs) sha256_process_bytes(buf, 1, &dcf->sha256);
-	if(_dcf_recordsize_inci(dcf, 1))
+	if(cs) sha256_process_bytes(buf, 2, &dcf->sha256);
+	if(_dcf_recordsize_inci(dcf, 2))
 		return -1;
 	return 0;
 }

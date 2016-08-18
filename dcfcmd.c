@@ -40,7 +40,7 @@ int append(struct dcf *dcf)
 	if(dcf_meta_write_final(dcf))
 		return -1;
 
-	if(dcf_checksum_write(dcf, (void*)0))
+	if(dcf_hash_write(dcf, (void*)0))
 		return -1;
 	
 	while((n=read(0, buf, sizeof(buf)))>0) {
@@ -52,7 +52,7 @@ int append(struct dcf *dcf)
 		return -1;
 	if(dcf_signature_write(dcf, "sigge", 5, "STARDUST", 8))
 		return -1;
-	if(dcf_checksum_write(dcf, (void*)0))
+	if(dcf_hash_write(dcf, (void*)0))
 		return -1;
 	if(dcf_recordsize_write(dcf, (void*)0))
 		return -1;

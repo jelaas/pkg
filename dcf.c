@@ -30,7 +30,7 @@ int dcf_varint_size_read(struct dcf *dcf); /* returns number bytes in varint */
 int dcf_varint_value_read(struct dcf *dcf, struct bigint *i);
 int dcf_meta_data_read(struct dcf *dcf, int datasize, unsigned char *data);
 int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *data);
-int dcf_checksum_read(struct dcf *dcf);
+int dcf_hash_read(struct dcf *dcf);
 #endif
 
 static int _dcf_recordsize_inc(struct dcf *dcf, struct bigint *inc)
@@ -229,14 +229,14 @@ int dcf_data_write_final(struct dcf *dcf) {
 	return _dcf_write_zero(dcf);
 }
 
-int dcf_checksum_write(struct dcf *dcf, char *chksum)
+int dcf_hash_write(struct dcf *dcf, char *hash)
 {
 	unsigned char resbuf[SHA256_DIGEST_LENGTH];
 	sha256_finish_ctx (&dcf->sha256, resbuf);
 	if(write(dcf->fd, resbuf, SHA256_DIGEST_LENGTH) != SHA256_DIGEST_LENGTH)
 		return -1;
-	if(chksum) {
-		memcpy(chksum, resbuf, SHA256_DIGEST_LENGTH);
+	if(hash) {
+		memcpy(hash, resbuf, SHA256_DIGEST_LENGTH);
 	}
 	sha256_init_ctx(&dcf->sha256);
 	if(_dcf_recordsize_inci(dcf, SHA256_DIGEST_LENGTH))
@@ -244,8 +244,8 @@ int dcf_checksum_write(struct dcf *dcf, char *chksum)
 	return 0;
 }
 
-/* writes recordsize and checksum of recordsize */
-int dcf_recordsize_write(struct dcf *dcf, char *chksum)
+/* writes recordsize and hash of recordsize */
+int dcf_recordsize_write(struct dcf *dcf, char *hash)
 {
 	char tail_v[4];
 	int tailsizei;
@@ -260,7 +260,7 @@ int dcf_recordsize_write(struct dcf *dcf, char *chksum)
 		return -1;
 	if(dcf_varint_write(dcf, &dcf->temp2))
                 return -1;
-	if(dcf_checksum_write(dcf, chksum))
+	if(dcf_hash_write(dcf, hash))
 		return -1;
 	bigint_zero(&dcf->recordsize);
 	return 0;

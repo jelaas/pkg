@@ -3,36 +3,6 @@
 #include "dcf.h"
 #include "bigint.h"
 
-int dcf_init(struct dcf *dcf, int fd, char *v, int v_len)
-{
-	dcf->fd = fd;
-	memset(&dcf->sha256, 0, sizeof(dcf->sha256));
-	sha256_init_ctx(&dcf->sha256);
-	if(bigint_loadi(&dcf->recordsize, v, v_len/3, 0))
-		return -1;
-	if(bigint_loadi(&dcf->temp, v+(v_len/3), v_len/3, 0))
-		return -1;
-	if(bigint_loadi(&dcf->temp2, v+(v_len/3)*2, v_len/3, 0))
-		return -1;
-	return 0;
-}
-
-int dcf_collectiontype_set(struct dcf *dcf, const char *collectiontype)
-{
-	memcpy(dcf->collectiontype, collectiontype, 4);
-	return 0;
-}
-
-#if 0
-int dcf_magic_read(struct dcf *dcf);
-int dcf_magic_read(struct dcf *dcf);
-int dcf_varint_size_read(struct dcf *dcf); /* returns number bytes in varint */
-int dcf_varint_value_read(struct dcf *dcf, struct bigint *i);
-int dcf_meta_data_read(struct dcf *dcf, int datasize, unsigned char *data);
-int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *data);
-int dcf_hash_read(struct dcf *dcf);
-#endif
-
 static int _dcf_recordsize_inc(struct dcf *dcf, struct bigint *inc)
 {
 	if(bigint_zero(&dcf->temp))
@@ -52,26 +22,6 @@ static int _dcf_recordsize_inci(struct dcf *dcf, int smallint)
 	if(bigint_loadi(&b, v, sizeof(v), smallint))
 		return -1;
 	if(_dcf_recordsize_inc(dcf, &b))
-		return -1;
-	return 0;
-}
-
-int dcf_magic_write(struct dcf *dcf)
-{
-	if(write(dcf->fd, DCF_MAGIC, 6) != 6)
-		return -1;
-	sha256_process_bytes(DCF_MAGIC, 6, &dcf->sha256);
-	if(_dcf_recordsize_inci(dcf, 6))
-		return -1;
-	return 0;
-}
-
-int dcf_collectiontype_write(struct dcf *dcf)
-{
-	if(write(dcf->fd, dcf->collectiontype, 4) != 4)
-		return -1;
-	sha256_process_bytes(dcf->collectiontype, 4, &dcf->sha256);
-	if(_dcf_recordsize_inci(dcf, 4))
 		return -1;
 	return 0;
 }
@@ -118,6 +68,135 @@ static int _dcf_varint_write_cs(struct dcf *dcf, struct bigint *b, int cs)
 	return 0;
 }
 
+int dcf_init(struct dcf *dcf, int fd, char *v, int v_len)
+{
+	dcf->fd = fd;
+	memset(&dcf->sha256, 0, sizeof(dcf->sha256));
+	sha256_init_ctx(&dcf->sha256);
+	if(bigint_loadi(&dcf->recordsize, v, v_len/3, 0))
+		return -1;
+	if(bigint_loadi(&dcf->temp, v+(v_len/3), v_len/3, 0))
+		return -1;
+	if(bigint_loadi(&dcf->temp2, v+(v_len/3)*2, v_len/3, 0))
+		return -1;
+	return 0;
+}
+
+int dcf_collectiontype_set(struct dcf *dcf, const char *collectiontype)
+{
+	memcpy(dcf->collectiontype, collectiontype, 4);
+	return 0;
+}
+
+int dcf_magic_read(struct dcf *dcf)
+{
+	char buf[6];
+	if(read(dcf->fd, buf, 6) != 6)
+		return -1;
+	sha256_process_bytes(DCF_MAGIC, 6, &dcf->sha256);
+	if(_dcf_recordsize_inci(dcf, 6))
+		return -1;
+	return memcmp(DCF_MAGIC, buf, 6);
+}
+
+int dcf_collectiontype_read(struct dcf *dcf)
+{
+	if(read(dcf->fd, dcf->collectiontype, 4) != 4)
+		return -1;
+	sha256_process_bytes(dcf->collectiontype, 4, &dcf->sha256);
+	if(_dcf_recordsize_inci(dcf, 4))
+		return -1;
+	return 0;
+}
+
+int dcf_varint_size_read(struct dcf *dcf, int *size)
+{
+	unsigned char buf[1];
+	if(read(dcf->fd, buf, 1) != 1)
+                return -1;
+	sha256_process_bytes(buf, 1, &dcf->sha256);
+	if(_dcf_recordsize_inci(dcf, 1))
+		return -1;
+	*size = buf[0];
+	return 0;
+}
+
+int dcf_varint_value_read(struct dcf *dcf, struct bigint *b, int size)
+{
+	int t;
+	unsigned char buf[1];
+	char *v = b->v;
+	int i = 0;
+
+	if(bigint_zero(b))
+		return -1;
+	while(size--) {
+		if(read(dcf->fd, buf, 1) != 1)
+			return -1;
+		sha256_process_bytes(buf, 1, &dcf->sha256);
+		t = buf;
+		if(i >= b->n) return -1;
+		v[i++] = t & 0xf;
+		if(size && (t >> 4)) {
+			if(i >= b->n) return -1;
+			v[i++] = t >> 4;
+		}
+	}
+	if(read(dcf->fd, buf, 1) != 1)
+		return -1;
+	sha256_process_bytes(buf, 1, &dcf->sha256);
+	if(buf[0] != size) return -1;
+	if(_dcf_recordsize_inci(dcf, size + 1))
+                return -1;
+	return 0;
+}
+
+/* 0 ok. 1 = end-of-meta-data. < 0 on error */
+int dcf_meta_data_read(struct dcf *dcf, int *datasize, int bufsize, char *buf)
+{
+	
+}
+
+/* 0 ok. 1 = end-of-data. < 0 on error */
+int dcf_data_read(struct dcf *dcf, int *datasize, int bufsize, unsigned char *buf)
+{
+}
+
+/* 0 ok. 1 = no-signature. < 0 on error */
+int dcf_signature_read(struct dcf *dcf, int * typesize, int *sigsize, int typebufsize, char *typebuf, int sigbufsize, unsigned char *sigbuf)
+{
+}
+
+/* reads and checks hash */
+int dcf_hash_read(struct dcf *dcf)
+{
+}
+
+/* reads and checks recordsize and hash of recordsize */
+int dcf_recordsize_read(struct dcf *dcf, char *hash)
+{
+}
+
+int dcf_magic_write(struct dcf *dcf)
+{
+	if(write(dcf->fd, DCF_MAGIC, 6) != 6)
+		return -1;
+	sha256_process_bytes(DCF_MAGIC, 6, &dcf->sha256);
+	if(_dcf_recordsize_inci(dcf, 6))
+		return -1;
+	return 0;
+}
+
+int dcf_collectiontype_write(struct dcf *dcf)
+{
+	if(write(dcf->fd, dcf->collectiontype, 4) != 4)
+		return -1;
+	sha256_process_bytes(dcf->collectiontype, 4, &dcf->sha256);
+	if(_dcf_recordsize_inci(dcf, 4))
+		return -1;
+	return 0;
+}
+
 int dcf_varint_write(struct dcf *dcf, struct bigint *b)
 {
 	return _dcf_varint_write_cs(dcf, b, 1);
@@ -154,7 +233,7 @@ static int _dcf_write_zero_cs(struct dcf *dcf, int cs) {
 	char buf[2];
 	buf[0] = 0;
 	buf[1] = 0;
-        if(write(dcf->fd, buf, 2) != 1)
+        if(write(dcf->fd, buf, 2) != 2)
                 return -1;
 	if(cs) sha256_process_bytes(buf, 2, &dcf->sha256);
 	if(_dcf_recordsize_inci(dcf, 2))

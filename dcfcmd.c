@@ -37,9 +37,11 @@ int append(struct dcf *dcf)
 	fprintf(stderr, "dcf_meta_write\n");
 	if(dcf_meta_write(dcf, strlen(conf.meta.name), conf.meta.name, strlen(conf.meta.content), conf.meta.content))
 		return -1;
+	fprintf(stderr, "dcf_meta_write_final\n");
 	if(dcf_meta_write_final(dcf))
 		return -1;
 
+	fprintf(stderr, "dcf_hash_write\n");
 	if(dcf_hash_write(dcf, (void*)0))
 		return -1;
 	
@@ -62,6 +64,9 @@ int append(struct dcf *dcf)
 
 int list(struct dcf *dcf)
 {
+	if(dcf_magic_read(dcf))
+		return -1;
+	
 	return 0;
 }
 
@@ -77,7 +82,9 @@ int main(int argc, char **argv)
 		if(dcf_init(&dcf, 1, v, sizeof(v)))
 			return 1;
 		dcf_collectiontype_set(&dcf, "TYPE");
-		return append(&dcf);
+		if(append(&dcf))
+			return 1;
+		return 0;
 	}
 	
 	if(dcf_init(&dcf, 0, v, sizeof(v)))

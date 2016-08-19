@@ -37,8 +37,8 @@ int dcf_collectiontype_set(struct dcf *dcf, const char *collectiontype);
 
 int dcf_magic_read(struct dcf *dcf);
 int dcf_collectiontype_read(struct dcf *dcf);
-int dcf_varint_size_read(struct dcf *dcf); /* returns number bytes in varint */
-int dcf_varint_value_read(struct dcf *dcf, struct bigint *i);
+int dcf_varint_size_read(struct dcf *dcf, int *size);
+int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
 int dcf_meta_data_read(struct dcf *dcf, int *datasize, int bufsize, char *buf); /* 0 ok. 1 = end-of-meta-data. < 0 on error */
 int dcf_data_read(struct dcf *dcf, int *datasize, int bufsize, unsigned char *buf); /* 0 ok. 1 = end-of-data. < 0 on error */
 int dcf_signature_read(struct dcf *dcf, int * typesize, int *sigsize, int typebufsize, char *typebuf, int sigbufsize, unsigned char *sigbuf); /* 0 ok. 1 = no-signature. < 0 on error */

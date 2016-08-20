@@ -134,7 +134,7 @@ int dcf_varint_value_read(struct dcf *dcf, struct bigint *b, int size)
 		if(read(dcf->fd, buf, 1) != 1)
 			return -1;
 		sha256_process_bytes(buf, 1, &dcf->sha256);
-		t = buf;
+		t = buf[0];
 		if(i >= b->n) return -1;
 		v[i++] = t & 0xf;
 		if(size && (t >> 4)) {
@@ -151,14 +151,12 @@ int dcf_varint_value_read(struct dcf *dcf, struct bigint *b, int size)
 	return 0;
 }
 
-/* 0 ok. 1 = end-of-meta-data. < 0 on error */
-int dcf_meta_data_read(struct dcf *dcf, int *datasize, int bufsize, char *buf)
-{
-	
-}
-
-/* 0 ok. 1 = end-of-data. < 0 on error */
-int dcf_data_read(struct dcf *dcf, int *datasize, int bufsize, unsigned char *buf)
+/*
+ * reads data segment. meta_data_identifier, meta_data_content or data segment.
+ * datasize is how much to read. bufsize is size of buffer to read into.
+ * 0 ok.
+ */
+int dcf_data_read(struct dcf *dcf, int datasize, int bufsize, unsigned char *buf)
 {
 }
 

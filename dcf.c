@@ -153,11 +153,17 @@ int dcf_varint_value_read(struct dcf *dcf, struct bigint *b, int size)
 
 /*
  * reads data segment. meta_data_identifier, meta_data_content or data segment.
- * datasize is how much to read. bufsize is size of buffer to read into.
+ * datasize is how much to read.
  * 0 ok.
  */
-int dcf_data_read(struct dcf *dcf, int datasize, int bufsize, unsigned char *buf)
+int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf)
 {
+	if(read(dcf->fd, buf, datasize) != datasize)
+		return -1;
+	sha256_process_bytes(buf, datasize, &dcf->sha256);
+	if(_dcf_recordsize_inci(dcf, datasize))
+                return -1;
+	return 0;
 }
 
 /* 0 ok. 1 = no-signature. < 0 on error */
@@ -168,11 +174,42 @@ int dcf_signature_read(struct dcf *dcf, int * typesize, int *sigsize, int typebu
 /* reads and checks hash */
 int dcf_hash_read(struct dcf *dcf)
 {
+	unsigned char buf[SHA256_DIGEST_LENGTH];
+	unsigned char resbuf[SHA256_DIGEST_LENGTH];
+	sha256_finish_ctx (&dcf->sha256, resbuf);
+	if(read(dcf->fd, buf, SHA256_DIGEST_LENGTH) != SHA256_DIGEST_LENGTH)
+		return -1;
+	if(memcmp(buf, resbuf, SHA256_DIGEST_LENGTH))
+		return -1;
+	sha256_init_ctx(&dcf->sha256);
+	if(_dcf_recordsize_inci(dcf, SHA256_DIGEST_LENGTH))
+                return -1;
+	return 0;
 }
 
 /* reads and checks recordsize and hash of recordsize */
 int dcf_recordsize_read(struct dcf *dcf, char *hash)
 {
+	int bsize;
+	
+	if(dcf_varint_size_read(dcf, &bsize))
+		return -1;
+	if(bsize > dcf->temp2.n)
+		return -1;
+	if(dcf_varint_value_read(dcf, &dcf->temp2, bsize))
+		return -1;
+	if(dcf_hash_read(dcf))
+		return -1;
+	dcf->recordsize.neg = 1;
+	if(bigint_zero(&dcf->temp))
+                return -1;
+	if(bigint_sum(&dcf->temp, &dcf->temp2, &dcf->recordsize))
+		return -1;
+	if(!bigint_iszero(&dcf->temp))
+                return -1;
+	if(bigint_zero(&dcf->recordsize))
+                return -1;
+	return 0;
 }
 
 int dcf_magic_write(struct dcf *dcf)

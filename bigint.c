@@ -59,6 +59,14 @@ int bigint_zero(struct bigint *b)
 	return 0;
 }
 
+int bigint_iszero(struct bigint *b)
+{
+	int i;
+	for (i = 0; i < b->n; i++)
+		if(b->v[i]) return 0;
+	return 1;
+}
+
 static int _bigint_add(struct bigint *res, const struct bigint *i1, const struct bigint *i2, int res_sign)
 {
 	int carry = 0;

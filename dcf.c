@@ -305,14 +305,13 @@ int dcf_data_write(struct dcf *dcf, const char *buf, int size)
         return 0;
 }
 
-/* sigtypesize == 0 means no signature */
-int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, const char *sig, int sigsize)
+int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, const char *sig, int sigsize, char *hash)
 {
 	struct bigint b;
 	char v[16];
 
 	if(sigtypesize == 0)
-		return _dcf_write_zero(dcf);
+		return -1;
 	if(sigsize == 0)
 		return -1;
 	
@@ -335,8 +334,14 @@ int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, c
         sha256_process_bytes(sig, sigsize, &dcf->sha256);
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
-	
+
+	if(hash && dcf_hash_write(dcf, hash))
+		return -1;	
         return 0;	
+}
+
+int dcf_signature_write_final(struct dcf *dcf) {
+	return _dcf_write_zero(dcf);
 }
 
 int dcf_data_write_final(struct dcf *dcf) {
@@ -365,6 +370,8 @@ int dcf_recordsize_write(struct dcf *dcf, char *hash)
 	int tailsizei;
 	struct bigint tailsize;
 	
+	sha256_init_ctx(&dcf->sha256);
+	
 	tailsizei = _dcf_varint_size(dcf, &dcf->recordsize) + SHA256_DIGEST_LENGTH;
 	if(bigint_loadi(&tailsize, tail_v, sizeof(tail_v), tailsizei))
 		return -1;
@@ -374,7 +381,7 @@ int dcf_recordsize_write(struct dcf *dcf, char *hash)
 		return -1;
 	if(dcf_varint_write(dcf, &dcf->temp2))
                 return -1;
-	if(dcf_hash_write(dcf, hash))
+	if(hash && dcf_hash_write(dcf, hash))
 		return -1;
 	bigint_zero(&dcf->recordsize);
 	return 0;

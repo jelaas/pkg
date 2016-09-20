@@ -335,7 +335,7 @@ int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, c
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
 
-	if(hash && dcf_hash_write(dcf, hash))
+	if(dcf_hash_write(dcf, hash))
 		return -1;	
         return 0;	
 }
@@ -381,7 +381,7 @@ int dcf_recordsize_write(struct dcf *dcf, char *hash)
 		return -1;
 	if(dcf_varint_write(dcf, &dcf->temp2))
                 return -1;
-	if(hash && dcf_hash_write(dcf, hash))
+	if(dcf_hash_write(dcf, hash))
 		return -1;
 	bigint_zero(&dcf->recordsize);
 	return 0;

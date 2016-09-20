@@ -15,7 +15,7 @@ Record:
  VARINT recordsize. Size of complete record from dcf_magic upto and including recordsizehash.
  OCTETS recordsizehash[32] (data) -- SHA256 hash of recordsize
  
- VARINT = NUMINTBYTES INTBYTELOW .. INTBYTEHIGH .. NUMINTBYTES(repeated)
+ VARINT = NUMINTBYTES INTBYTELOW .. INTBYTEHIGH .. NUMINTBYTES(repeated). Integer zero (0) must be specified with NUMINTBYTES zero (0) = two consecutive zero octets.
 
  */
 #include "sha256.h"

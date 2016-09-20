@@ -3,14 +3,14 @@
 Data Collection Format
 
 Record:
- char dcf_magic[6]
- char collectiontype[4]; Subtype that uses DCF as a container 
+ OCTETS dcf_magic[6]
+ OCTETS collectiontype[4]; Subtype that uses DCF as a container 
  VARINT dcfversion
  VARINT collectionid This way we can multiplex records from several collections with the same collectiontype
  meta: (VARINT 0|VARINT identsize, OCTETS identifier, VARINT contentsize, OCTETS content)  Repeated until identsize or contentsize is 0 which marks the end of metadata.
- OCTETS hash[32] (meta) -- SHA256 hash from magic upto and including meta
+ OCTETS hash[32] (meta) -- SHA256 hash from magic upto and including 'meta' section
  data: (VARINT 0|VARINT datasize, OCTETS data). Repeated until datasize is 0 which marks the end of data.
- OCTETS datahash[32] (data) -- SHA256 hash of 'data' and 'signature' sections
+ OCTETS datahash[32] (data) -- SHA256 hash of 'data' section
  signature: (VARINT 0|VARINT signaturetypesize, OCTETS signaturetype, VARINT signaturesize, OCTETS signature, OCTETS sighash[32]). Repeated until signaturetypesize is 0.
  VARINT recordsize. Size of complete record from dcf_magic upto and including recordsizehash.
  OCTETS recordsizehash[32] (data) -- SHA256 hash of recordsize

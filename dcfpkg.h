@@ -8,6 +8,7 @@
    1 = Meta-data for archive.
    2 = Build specification files
    3 = Files used to perform installation and uninstall.
+   4 = Manifest of contents
 
  Metadata identifiers used in collection 1
  -----------------------------------------
@@ -45,13 +46,19 @@
  -----------------------------------------
  - Files used for performing installation, uninstallation and bookkeeping.
  - 'name' MUST NOT contain '/'.
- name = manifest|preinstall|postinstall|preuninstall|postuninstall
- filetype = regular|dir
+ name = preinstall|postinstall|preuninstall|postuninstall
  filemode = executable|read-only
  size
  
- * manifest: DATA is list of files in collection 0.
  * (pre|post)[un]install: DATA is an executable to be run at the appropriate time during package management.
+
+ Metadata identifiers used in collection 4
+ -----------------------------------------
+ - Manifest of package collection 0 contents.
+ - Several manifest records may be present in collection. The manifest with highest version is the current manifest.
+ version = decimal string of version. Highest is latest.
+ 
+ * DATA is list of files in collection 0.
 
  Metadata identifiers used in collection 0
  -----------------------------------------

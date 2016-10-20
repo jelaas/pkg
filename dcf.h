@@ -9,7 +9,7 @@ Record:
  VARINT collectionid This way we can multiplex records from several collections with the same collectiontype
  meta: (VARINT 0|VARINT identsize, OCTETS identifier, VARINT contentsize, OCTETS content)  Repeated until identsize or contentsize is 0 which marks the end of metadata.
  OCTETS hash[32] (meta) -- SHA256 hash from magic upto and including 'meta' section
- data: (VARINT 0|VARINT datasize, OCTETS data). Repeated until datasize is 0 which marks the end of data.
+ data: (VARINT 0|VARINT datasize, VARINT padsize, OCTETS data). Repeated until datasize is 0 which marks the end of data. padsize is the number octets at the end of data used for padding (not actual content).
  OCTETS datahash[32] (data) -- SHA256 hash of 'data' section
  signature: (VARINT 0|VARINT signaturetypesize, OCTETS signaturetype, VARINT signaturesize, OCTETS signature, OCTETS sighash[32]). Repeated until signaturetypesize is 0.
  VARINT recordsize. Size of complete record from dcf_magic upto and including recordsizehash.

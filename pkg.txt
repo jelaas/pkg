@@ -44,7 +44,7 @@ Paket:
 ------
 Av typen dcfpkg.
 
-Ingen signatur. Signatur hanteras OOB
+Stödjer signering av varje record.
 
 Stödja dekryptering via public key? Kanske bättre med en separat databas med signade paket?
 <pkg>, <pubkey>, <signature>, <expiration-date> //expiration-date to mitigate replay attack

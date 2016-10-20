@@ -284,15 +284,21 @@ int dcf_meta_write_final(struct dcf *dcf) {
 	return _dcf_write_zero(dcf);
 }
 
-int dcf_data_write(struct dcf *dcf, const char *buf, int size)
+int dcf_data_write(struct dcf *dcf, const char *buf, int size, int padsize)
 {
 	struct bigint b;
 	char v[16];
 
 	if(size == 0)
 		return -1;
+	if(padsize >= size)
+		return -1;
 	
 	if(bigint_loadi(&b, v, sizeof(v), size))
+		return -1;
+	if(dcf_varint_write(dcf, &b))
+		return -1;
+	if(bigint_loadi(&b, v, sizeof(v), padsize))
 		return -1;
 	if(dcf_varint_write(dcf, &b))
 		return -1;

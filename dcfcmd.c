@@ -46,7 +46,7 @@ int append(struct dcf *dcf)
 		return -1;
 	
 	while((n=read(0, buf, sizeof(buf)))>0) {
-		if(dcf_data_write(dcf, buf, n))
+		if(dcf_data_write(dcf, buf, n, 0))
 			return -1;
 	}
 	

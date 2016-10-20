@@ -49,7 +49,7 @@ int dcf_collectiontype_write(struct dcf *dcf);
 int dcf_varint_write(struct dcf *dcf, struct bigint *i);
 int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int contentsize, const char *content);
 int dcf_meta_write_final(struct dcf *dcf);
-int dcf_data_write(struct dcf *dcf, const char *buf, int size);
+int dcf_data_write(struct dcf *dcf, const char *buf, int size, int padsize);
 int dcf_data_write_final(struct dcf *dcf);
 int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, const char *sig, int sigsize, char *hash); /* copy of hash to hash */
 int dcf_signature_write_final(struct dcf *dcf);

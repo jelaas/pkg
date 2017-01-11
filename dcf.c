@@ -93,11 +93,14 @@ static int parity(unsigned int v)
 }
 
 /* initial crc value should be 0xFFFF */
-static unsigned short crc16(unsigned short crc, const unsigned char* data, unsigned char length){
+static unsigned short crc16(unsigned short crc, const void *data, unsigned char length){
 	unsigned char x;
+	const uint8_t *p;
+
+	p = data;
 
 	while (length--){
-		x = crc >> 8 ^ *data++;
+		x = crc >> 8 ^ *p++;
 		x ^= x>>4;
 		crc = (crc << 8) ^ (x << 12) ^ (x <<5) ^ x;
 	}
@@ -136,18 +139,31 @@ static int _dcf_varint_size(struct dcf *dcf, struct bigint *b)
 	return 1 + bytes + 1;
 }
 
+static void mkham(unsigned char *buf, unsigned int byte)
+{
+	buf[0] = hamcode[(byte & 0xf0) >> 4];
+	buf[0] |= parity(buf[0]) << 7;
+	buf[1] = hamcode[(byte & 0xf)];
+	buf[1] |= parity(buf[1]) << 7;	
+}
+
 static int _dcf_varint_write_cs(struct dcf *dcf, struct bigint *b, int cs)
 {
 	int nibs, bytes, i, totwritten = 0;
-	unsigned char numbytes[1], buf[1];
+	unsigned char numbytes[2], ham[2], buf[2];
+	unsigned short crc = 0xffff;
 
 	nibs = (bigint_bits(b)+3)/4;
 	bytes = (nibs+1)/2;
-	numbytes[0] = bytes;
-	if(write(dcf->fd, numbytes, 1) != 1)
+	mkham(numbytes, bytes);
+	if(write(dcf->fd, numbytes, 2) != 2)
                 return -1;
-	if(cs) sha256_process_bytes(numbytes, 1, &dcf->sha256);
-	totwritten++;
+	totwritten+=2;
+	crc = crc16(crc, numbytes, 2);
+	if(cs) {
+		dcf->crc32 = crc32(dcf->crc32, numbytes, 2);
+		dcf->crc16 = crc16(dcf->crc16, numbytes, 2);
+	}
 	for(i=0;i<bytes;i++) {
 		if((i*2+1) >= nibs)
 			buf[0] = 0;
@@ -155,15 +171,33 @@ static int _dcf_varint_write_cs(struct dcf *dcf, struct bigint *b, int cs)
 			buf[0] = b->v[i*2+1];
 		buf[0] <<= 4;
 		buf[0] += b->v[i*2];
-		if(write(dcf->fd, buf, 1) != 1)
+		mkham(ham, buf[0]);
+		if(write(dcf->fd, ham, 2) != 2)
 			return -1;
-		if(cs) sha256_process_bytes(buf, 1, &dcf->sha256);
-		totwritten++;
+		totwritten+=2;
+		crc = crc16(crc, ham, 2);
+		if(cs) {
+			dcf->crc32 = crc32(dcf->crc32, ham, 2);
+			dcf->crc16 = crc16(dcf->crc16, ham, 2);
+		}
 	}
-	if(write(dcf->fd, numbytes, 1) != 1)
+	if(write(dcf->fd, numbytes, 2) != 2)
                 return -1;
-	if(cs) sha256_process_bytes(numbytes, 1, &dcf->sha256);
-	totwritten++;
+	totwritten+=2;
+	crc = crc16(crc, numbytes, 2);
+	if(cs) {
+		dcf->crc32 = crc32(dcf->crc32, numbytes, 2);
+		dcf->crc16 = crc16(dcf->crc16, numbytes, 2);
+	}
+	buf[0] = crc & 0xff00 >> 8;
+	buf[1] = crc & 0xff;
+	if(write(dcf->fd, buf, 2) != 2)
+                return -1;
+	totwritten+=2;
+	if(cs) {
+		dcf->crc32 = crc32(dcf->crc32, buf, 2);
+		dcf->crc16 = crc16(dcf->crc16, buf, 2);
+	}
 	if(_dcf_recordsize_inci(dcf, totwritten))
 		return -1;
 	return 0;
@@ -172,8 +206,8 @@ static int _dcf_varint_write_cs(struct dcf *dcf, struct bigint *b, int cs)
 int dcf_init(struct dcf *dcf, int fd, char *v, int v_len)
 {
 	dcf->fd = fd;
-	memset(&dcf->sha256, 0, sizeof(dcf->sha256));
-	sha256_init_ctx(&dcf->sha256);
+	dcf->crc16 = 0xffff;
+	dcf->crc32 = 0;
 	if(bigint_loadi(&dcf->recordsize, v, v_len/3, 0))
 		return -1;
 	if(bigint_loadi(&dcf->temp, v+(v_len/3), v_len/3, 0))
@@ -191,10 +225,11 @@ int dcf_collectiontype_set(struct dcf *dcf, const char *collectiontype)
 
 int dcf_magic_read(struct dcf *dcf)
 {
-	char buf[6];
+	unsigned char buf[6];
 	if(read(dcf->fd, buf, 6) != 6)
 		return -1;
-	sha256_process_bytes(DCF_MAGIC, 6, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, buf, 6);
+	dcf->crc16 = crc16(dcf->crc16, buf, 6);
 	if(_dcf_recordsize_inci(dcf, 6))
 		return -1;
 	return memcmp(DCF_MAGIC, buf, 6);
@@ -204,7 +239,8 @@ int dcf_collectiontype_read(struct dcf *dcf)
 {
 	if(read(dcf->fd, dcf->collectiontype, 4) != 4)
 		return -1;
-	sha256_process_bytes(dcf->collectiontype, 4, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, dcf->collectiontype, 4);
+	dcf->crc16 = crc16(dcf->crc16, dcf->collectiontype, 4);
 	if(_dcf_recordsize_inci(dcf, 4))
 		return -1;
 	return 0;
@@ -215,7 +251,8 @@ int dcf_varint_size_read(struct dcf *dcf, int *size)
 	unsigned char buf[1];
 	if(read(dcf->fd, buf, 1) != 1)
                 return -1;
-	sha256_process_bytes(buf, 1, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, buf, 1);
+	dcf->crc16 = crc16(dcf->crc16, buf, 1);
 	if(_dcf_recordsize_inci(dcf, 1))
 		return -1;
 	*size = buf[0];
@@ -234,7 +271,8 @@ int dcf_varint_value_read(struct dcf *dcf, struct bigint *b, int size)
 	while(size--) {
 		if(read(dcf->fd, buf, 1) != 1)
 			return -1;
-		sha256_process_bytes(buf, 1, &dcf->sha256);
+		dcf->crc32 = crc32(dcf->crc32, buf, 1);
+		dcf->crc16 = crc16(dcf->crc16, buf, 1);
 		t = buf[0];
 		if(i >= b->n) return -1;
 		v[i++] = t & 0xf;
@@ -245,7 +283,8 @@ int dcf_varint_value_read(struct dcf *dcf, struct bigint *b, int size)
 	}
 	if(read(dcf->fd, buf, 1) != 1)
 		return -1;
-	sha256_process_bytes(buf, 1, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, buf, 1);
+	dcf->crc16 = crc16(dcf->crc16, buf, 1);
 	if(buf[0] != size) return -1;
 	if(_dcf_recordsize_inci(dcf, size + 1))
                 return -1;
@@ -261,7 +300,8 @@ int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf)
 {
 	if(read(dcf->fd, buf, datasize) != datasize)
 		return -1;
-	sha256_process_bytes(buf, datasize, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, buf, datasize);
+	dcf->crc16 = crc16(dcf->crc16, buf, datasize);
 	if(_dcf_recordsize_inci(dcf, datasize))
                 return -1;
 	return 0;
@@ -272,22 +312,38 @@ int dcf_signature_read(struct dcf *dcf, int * typesize, int *sigsize, int typebu
 {
 }
 
-/* reads and checks hash */
+/* reads and checks crc16 */
 int dcf_crc16_read(struct dcf *dcf)
 {
 	unsigned char buf[2];
 	if(read(dcf->fd, buf, 2) != 2)
 		return -1;
-	if(dcf->crc16 != buf[0] << 8 + buf[1])
+	if(dcf->crc16 != (buf[0] << 8) + buf[1])
 		return -1;
-	dcf->crc16 = 0xffff
-	if(_dcf_recordsize_inci(dcf, SHA256_DIGEST_LENGTH))
+	dcf->crc16 = 0xffff;
+	dcf->crc32 = crc32(dcf->crc32, buf, 2);
+	if(_dcf_recordsize_inci(dcf, 2))
                 return -1;
 	return 0;
 }
 
-/* reads and checks recordsize and hash of recordsize */
-int dcf_recordsize_read(struct dcf *dcf, char *hash)
+/* reads and checks crc32 */
+int dcf_crc32_read(struct dcf *dcf)
+{
+	unsigned char buf[4];
+	if(read(dcf->fd, buf, 4) != 4)
+		return -1;
+	if(dcf->crc32 != (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3])
+		return -1;
+	dcf->crc32 = 0;
+	dcf->crc16 = crc16(dcf->crc16, buf, 4);
+	if(_dcf_recordsize_inci(dcf, 4))
+                return -1;
+	return 0;
+}
+
+/* reads and checks recordsize  */
+int dcf_recordsize_read(struct dcf *dcf)
 {
 	int bsize;
 	
@@ -296,8 +352,6 @@ int dcf_recordsize_read(struct dcf *dcf, char *hash)
 	if(bsize > dcf->temp2.n)
 		return -1;
 	if(dcf_varint_value_read(dcf, &dcf->temp2, bsize))
-		return -1;
-	if(dcf_hash_read(dcf))
 		return -1;
 	dcf->recordsize.neg = 1;
 	if(bigint_zero(&dcf->temp))
@@ -315,7 +369,8 @@ int dcf_magic_write(struct dcf *dcf)
 {
 	if(write(dcf->fd, DCF_MAGIC, 6) != 6)
 		return -1;
-	sha256_process_bytes(DCF_MAGIC, 6, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, DCF_MAGIC, 6);
+	dcf->crc16 = crc16(dcf->crc16, DCF_MAGIC, 6);
 	if(_dcf_recordsize_inci(dcf, 6))
 		return -1;
 	return 0;
@@ -325,7 +380,8 @@ int dcf_collectiontype_write(struct dcf *dcf)
 {
 	if(write(dcf->fd, dcf->collectiontype, 4) != 4)
 		return -1;
-	sha256_process_bytes(dcf->collectiontype, 4, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, dcf->collectiontype, 4);
+	dcf->crc16 = crc16(dcf->crc16, dcf->collectiontype, 4);
 	if(_dcf_recordsize_inci(dcf, 4))
 		return -1;
 	return 0;
@@ -346,7 +402,8 @@ int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int conten
 		return -1;
 	if(write(dcf->fd, ident, identsize) != identsize)
                 return -1;
-	sha256_process_bytes(ident, identsize, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, ident, identsize);
+	dcf->crc16 = crc16(dcf->crc16, ident, identsize);
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
 
@@ -356,7 +413,8 @@ int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int conten
 		return -1;
 	if(write(dcf->fd, content, contentsize) != contentsize)
                 return -1;
-	sha256_process_bytes(content, contentsize, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, content, contentsize);
+	dcf->crc16 = crc16(dcf->crc16, content, contentsize);
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
 
@@ -369,7 +427,10 @@ static int _dcf_write_zero_cs(struct dcf *dcf, int cs) {
 	buf[1] = 0;
         if(write(dcf->fd, buf, 2) != 2)
                 return -1;
-	if(cs) sha256_process_bytes(buf, 2, &dcf->sha256);
+	if(cs) {
+		dcf->crc32 = crc32(dcf->crc32, buf, 2);
+		dcf->crc16 = crc16(dcf->crc16, buf, 2);
+	}
 	if(_dcf_recordsize_inci(dcf, 2))
 		return -1;
 	return 0;
@@ -403,14 +464,15 @@ int dcf_data_write(struct dcf *dcf, const char *buf, int size, int padsize)
 		return -1;
 	if(write(dcf->fd, buf, size) != size)
                 return -1;
-        sha256_process_bytes(buf, size, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, buf, size);
+	dcf->crc16 = crc16(dcf->crc16, buf, size);
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
 	
         return 0;
 }
 
-int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, const char *sig, int sigsize, char *hash)
+int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, const char *sig, int sigsize)
 {
 	struct bigint b;
 	char v[16];
@@ -426,7 +488,8 @@ int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, c
 		return -1;
 	if(write(dcf->fd, sigtype, sigtypesize) != sigtypesize)
                 return -1;
-        sha256_process_bytes(sigtype, sigtypesize, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, sigtype, sigtypesize);
+	dcf->crc16 = crc16(dcf->crc16, sigtype, sigtypesize);
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
 	
@@ -436,11 +499,12 @@ int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, c
 		return -1;
 	if(write(dcf->fd, sig, sigsize) != sigsize)
                 return -1;
-        sha256_process_bytes(sig, sigsize, &dcf->sha256);
+	dcf->crc32 = crc32(dcf->crc32, sig, sigsize);
+	dcf->crc16 = crc16(dcf->crc16, sig, sigsize);
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
 
-	if(dcf_hash_write(dcf, hash))
+	if(dcf_crc16_write(dcf))
 		return -1;	
         return 0;	
 }
@@ -453,31 +517,29 @@ int dcf_data_write_final(struct dcf *dcf) {
 	return _dcf_write_zero(dcf);
 }
 
-int dcf_hash_write(struct dcf *dcf, char *hash)
+int dcf_crc16_write(struct dcf *dcf)
 {
-	unsigned char resbuf[SHA256_DIGEST_LENGTH];
-	sha256_finish_ctx (&dcf->sha256, resbuf);
-	if(write(dcf->fd, resbuf, SHA256_DIGEST_LENGTH) != SHA256_DIGEST_LENGTH)
+	unsigned char buf[2];
+	buf[0] = (dcf->crc16 & 0xff00) >> 8;
+	buf[1] = dcf->crc16 & 0xff;
+	if(write(dcf->fd, buf, 2) != 2)
 		return -1;
-	if(hash) {
-		memcpy(hash, resbuf, SHA256_DIGEST_LENGTH);
-	}
-	sha256_init_ctx(&dcf->sha256);
-	if(_dcf_recordsize_inci(dcf, SHA256_DIGEST_LENGTH))
+	if(_dcf_recordsize_inci(dcf, 2))
 		return -1;
 	return 0;
 }
 
-/* writes recordsize and hash of recordsize */
-int dcf_recordsize_write(struct dcf *dcf, char *hash)
+/* writes recordsize */
+int dcf_recordsize_write(struct dcf *dcf)
 {
 	char tail_v[4];
 	int tailsizei;
 	struct bigint tailsize;
 	
-	sha256_init_ctx(&dcf->sha256);
+	dcf->crc16 = 0xffff;
+	dcf->crc32 = 0;
 	
-	tailsizei = _dcf_varint_size(dcf, &dcf->recordsize) + SHA256_DIGEST_LENGTH;
+	tailsizei = _dcf_varint_size(dcf, &dcf->recordsize);
 	if(bigint_loadi(&tailsize, tail_v, sizeof(tail_v), tailsizei))
 		return -1;
 	if(bigint_zero(&dcf->temp2))
@@ -486,8 +548,6 @@ int dcf_recordsize_write(struct dcf *dcf, char *hash)
 		return -1;
 	if(dcf_varint_write(dcf, &dcf->temp2))
                 return -1;
-	if(dcf_hash_write(dcf, hash))
-		return -1;
 	bigint_zero(&dcf->recordsize);
 	return 0;
 }

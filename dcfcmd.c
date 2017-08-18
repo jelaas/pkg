@@ -53,23 +53,32 @@ int append(struct dcf *dcf)
 	if(dcf_meta_write_final(dcf))
 		return -1;
 
+	fprintf(stderr, "padsize\n");
 	if(bigint_loadi(&padsize, padsize_v, sizeof(padsize_v), conf.padsize))
 		return -1;
-	if(dcf_varint_write(dcf, (void*)0, &padsize))
+	if(dcf_varint_write(dcf, &crc, &padsize))
 		return -1;
 
+	fprintf(stderr, "padding\n");
 	if(dcf_write_zeros(dcf, (void*)0, conf.padsize))
 		return -1;
 
+	fprintf(stderr, "data magic\n");
 	if(dcf_data_write_magic(dcf))
 		return -1;
 
+	fprintf(stderr, "data pos\n");
+	if(dcf_pos_write(dcf, &crc))
+		return -1;
+
+	fprintf(stderr, "data segments\n");
 	crc_push(&crc, CRC32);
 	while((n=read(0, buf, sizeof(buf)))>0) {
 		if(dcf_data_write(dcf, &crc, buf, n, 0))
 			return -1;
 	}
 	
+	fprintf(stderr, "data final\n");
 	if(dcf_data_write_final(dcf, &crc))
 		return -1;
 	if(dcf_crc32_write(dcf, &crc))
@@ -83,12 +92,12 @@ int append(struct dcf *dcf)
 
 	if(bigint_loadi(&recpadsize, recpadsize_v, sizeof(recpadsize_v), conf.recpadsize))
 		return -1;
-	if(dcf_varint_write(dcf, (void*)0, &recpadsize))
+	if(dcf_varint_write(dcf, &crc, &recpadsize))
 		return -1;
 
 	if(dcf_write_zeros(dcf, (void*)0, conf.recpadsize))
 		return -1;
-	if(dcf_recordsize_write(dcf))
+	if(dcf_recordsize_write(dcf, &crc))
 		return -1;
 	
 	return 0;

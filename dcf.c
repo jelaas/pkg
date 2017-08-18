@@ -27,6 +27,17 @@ static int _dcf_recordsize_inci(struct dcf *dcf, int smallint)
 	return 0;
 }
 
+static int _dcf_write_zero(struct dcf *dcf, struct crc *crc) {
+	char buf[2];
+	buf[0] = 0;
+	buf[1] = 0;
+        if(crc_write(dcf->fd, crc, buf, 2) != 2)
+                return -1;
+	if(_dcf_recordsize_inci(dcf, 2))
+		return -1;
+	return 0;
+}
+
 static int _dcf_varint_size(struct dcf *dcf, struct bigint *b)
 {
 	int nibs, bytes;
@@ -41,6 +52,10 @@ int dcf_varint_write(struct dcf *dcf, struct crc *crc, struct bigint *b)
 	int nibs, i, totwritten = 0;
 	unsigned int crc16;
 	unsigned char buf[2];
+
+	if(bigint_iszero(b)) {
+		return _dcf_write_zero(dcf, crc);
+	}
 
 	crc_push(crc, CRC16);
 	nibs = bigint_nibbles(b);
@@ -76,15 +91,15 @@ int dcf_varint_write(struct dcf *dcf, struct crc *crc, struct bigint *b)
 	totwritten+=2;
 	if(_dcf_recordsize_inci(dcf, totwritten))
 		return -1;
-	crc_pop(crc, CRC16);
+	if(crc_pop(crc, CRC16))
+		return -1;
 	return 0;
 }
 
 int dcf_init(struct dcf *dcf, int fd, char *v, int v_len)
 {
 	dcf->fd = fd;
-	dcf->crc16 = 0xffff;
-	dcf->crc32 = 0;
+	dcf->segmentid = 0;
 	if(bigint_loadi(&dcf->recordsize, v, v_len/3, 0))
 		return -1;
 	if(bigint_loadi(&dcf->temp, v+(v_len/3), v_len/3, 0))
@@ -278,7 +293,7 @@ int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int conten
 		return -1;
 	if(dcf_varint_write(dcf, &crc, &b))
 		return -1;
-	if(write(dcf->fd, ident, identsize) != identsize)
+	if(crc_write(dcf->fd, &crc, ident, identsize) != identsize)
                 return -1;
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
@@ -287,22 +302,15 @@ int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int conten
 		return -1;
 	if(dcf_varint_write(dcf, &crc, &b))
 		return -1;
-	if(write(dcf->fd, content, contentsize) != contentsize)
+	if(crc_write(dcf->fd, &crc, content, contentsize) != contentsize)
                 return -1;
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
 
-	crc_pop(&crc, CRC16);
-	return 0;
-}
+	if(dcf_crc16_write(dcf, &crc))
+		return -1;	
 
-static int _dcf_write_zero(struct dcf *dcf, struct crc *crc) {
-	char buf[2];
-	buf[0] = 0;
-	buf[1] = 0;
-        if(crc_write(dcf->fd, crc, buf, 2) != 2)
-                return -1;
-	if(_dcf_recordsize_inci(dcf, 2))
+	if(crc_pop(&crc, CRC16))
 		return -1;
 	return 0;
 }
@@ -321,19 +329,32 @@ int dcf_data_write(struct dcf *dcf, struct crc *crc, const char *buf, int size, 
 	if(padsize >= size)
 		return -1;
 	
+	crc_push(crc, CRC32);
+
 	if(bigint_loadi(&b, v, sizeof(v), size))
 		return -1;
 	if(dcf_varint_write(dcf, crc, &b))
 		return -1;
+
+	if(bigint_loadi(&b, v, sizeof(v), dcf->segmentid++))
+		return -1;
+	if(dcf_varint_write(dcf, crc, &b))
+		return -1;
+
 	if(bigint_loadi(&b, v, sizeof(v), padsize))
 		return -1;
 	if(dcf_varint_write(dcf, crc, &b))
 		return -1;
+
 	if(crc_write(dcf->fd, crc, buf, size) != size)
                 return -1;
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
-	
+
+	if(dcf_crc32_write(dcf, crc))
+		return -1;
+	if(crc_pop(crc, CRC32))
+		return -1;
         return 0;
 }
 
@@ -371,7 +392,8 @@ int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, c
 
 	if(dcf_crc16_write(dcf, &crc))
 		return -1;	
-	crc_pop(&crc, CRC16);
+	if(crc_pop(&crc, CRC16))
+		return -1;
         return 0;	
 }
 
@@ -401,6 +423,9 @@ int dcf_write_zeros(struct dcf *dcf, struct crc *crc, int n)
 {
 	char buf[8] ="\x0\x0\x0\x0\x0\x0\x0\x0";
 	
+	if(_dcf_recordsize_inci(dcf, n))
+		return -1;
+
 	while(n > 7) {
 		if(crc_write(dcf->fd, crc, buf, 8) != 8)
 			return -1;
@@ -429,15 +454,12 @@ int dcf_crc32_write(struct dcf *dcf, struct crc *crc)
 	return 0;
 }
 
-/* writes recordsize */
-int dcf_recordsize_write(struct dcf *dcf)
+/* writes current position */
+int dcf_pos_write(struct dcf *dcf, struct crc *crc)
 {
 	char tail_v[4];
 	int tailsizei;
 	struct bigint tailsize;
-	
-	dcf->crc16 = 0xffff;
-	dcf->crc32 = 0;
 	
 	tailsizei = _dcf_varint_size(dcf, &dcf->recordsize);
 	if(bigint_loadi(&tailsize, tail_v, sizeof(tail_v), tailsizei))
@@ -446,8 +468,17 @@ int dcf_recordsize_write(struct dcf *dcf)
 		return -1;
 	if(bigint_sum(&dcf->temp2, &dcf->recordsize, &tailsize))
 		return -1;
-	if(dcf_varint_write(dcf, (void*)0, &dcf->temp2))
+	if(dcf_varint_write(dcf, crc, &dcf->temp2))
                 return -1;
+	return 0;
+}
+
+/* writes recordsize */
+int dcf_recordsize_write(struct dcf *dcf, struct crc *crc)
+{
+	if(dcf_pos_write(dcf, crc))
+		return -1;
 	bigint_zero(&dcf->recordsize);
 	return 0;
 }
+

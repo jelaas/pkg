@@ -13,7 +13,7 @@ Record:
  OCTETS padding[<padsize>]
  OCTETS data_magic[4]
  VARINT data_section_pos. Position in octets of start of data section relative start of record.
- data: (VARINT 0|datasize, VARINT 0|segmentid, VARINT padsize, OCTETS datasegment, CRC32 datasegmentcrc). Repeated until datasize is 0 which marks the end of data. padsize is the number octets at the end of data used for padding (not actual content).
+ data: (VARINT 0|datasize, VARINT (segmentid|0), VARINT padsize, OCTETS datasegment, CRC32 datasegmentcrc). Repeated until datasize is 0 which marks the end of data. padsize is the number octets at the end of data used for padding (not actual content).
  CRC32 datacrc(data section) -- CRC32 of 'data' section
  signature: (VARINT 0|VARINT signaturetypesize, OCTETS signaturetype, VARINT signaturesize, OCTETS signature, CRC16 sigcrc). Repeated until signaturetypesize is 0.
  VARINT padsize
@@ -35,8 +35,7 @@ Definitions:
 struct dcf {
   int fd;
   char collectiontype[4];
-  unsigned int crc32; /* initialized by dcf_init and dcf_crc(16|32)_(read|write) */
-  unsigned short crc16; /* initialized to 0xFFFF by dcf_init and dcf_crc(16|32)_(read|write) */
+  unsigned int segmentid;
   struct bigint recordsize;
   struct bigint temp, temp2;
 };
@@ -70,5 +69,6 @@ int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, c
 int dcf_signature_write_final(struct dcf *dcf);
 int dcf_crc16_write(struct dcf *dcf, struct crc *crc); /* write accumulated crc16 */
 int dcf_crc32_write(struct dcf *dcf, struct crc *crc); /* write accumulated crc16 */
-int dcf_recordsize_write(struct dcf *dcf); /* writes recordsize */
+int dcf_pos_write(struct dcf *dcf, struct crc *crc);
+int dcf_recordsize_write(struct dcf *dcf, struct crc *crc); /* writes recordsize */
 int dcf_write_zeros(struct dcf *dcf, struct crc *crc, int n);

@@ -9,22 +9,28 @@ Record:
  VARINT collectionid This way we can multiplex records from several collections with the same collectiontype
  CRC16 headcrc
  meta: (VARINT 0|VARINT identsize, OCTETS identifier, VARINT contentsize, OCTETS content, CRC16 metaitemcrc)  Repeated until identsize is 0 which marks the end of metadata.
+ VARINT padsize
+ OCTETS padding[<padsize>]
  OCTETS data_magic[4]
  VARINT data_section_pos. Position in octets of start of data section relative start of record.
- data: (VARINT 0|VARINT datasize, VARINT padsize, OCTETS datasegment, CRC32 datasegmentcrc). Repeated until datasize is 0 which marks the end of data. padsize is the number octets at the end of data used for padding (not actual content).
+ data: (VARINT 0|datasize, VARINT 0|segmentid, VARINT padsize, OCTETS datasegment, CRC32 datasegmentcrc). Repeated until datasize is 0 which marks the end of data. padsize is the number octets at the end of data used for padding (not actual content).
  CRC32 datacrc(data section) -- CRC32 of 'data' section
  signature: (VARINT 0|VARINT signaturetypesize, OCTETS signaturetype, VARINT signaturesize, OCTETS signature, CRC16 sigcrc). Repeated until signaturetypesize is 0.
+ VARINT padsize
+ OCTETS padding[<padsize>]
  VARINT recordsize. Size of complete record from dcf_magic upto and including recordsize.
  
 Definitions:
- VARINT = HAMCODED(NUMINTBYTES INTBYTELOW .. INTBYTEHIGH .. NUMINTBYTES(repeated)), CRC16. Integer zero (0) must be specified with NUMINTBYTES zero (0) = two consecutive hamcoded zero octets.
+ VARINT = NUMINTNIBBLES INTNIBBLE-LOW .. INTNIBBLE-HIGH .. NUMINTNIBBLES(repeated), CRC16.
+          Integer zero (0) must be specified with NUMINTNIBBLES zero (0)
+ NUMINTNIBBLES = 1 octet.
+ INTNIBBLE = 1 nibble (4 bits).
  CRC32 = OCTETS CRC32[4] network byte order
  CRC16 = OCTETS CRC16[2] network byte order
 
- HAMCODED() Data using Hammingcode 7/4 with extra parity bit. High nibble first.
-
  */
 #include "bigint.h"
+#include "crc.h"
 
 struct dcf {
   int fd;
@@ -52,15 +58,17 @@ int dcf_crc16_read(struct dcf *dcf); /* reads and checks crc16 */
 int dcf_crc32_read(struct dcf *dcf); /* reads and checks crc32 */
 int dcf_recordsize_read(struct dcf *dcf); /* reads and checks recordsize */
 
-int dcf_magic_write(struct dcf *dcf);
-int dcf_collectiontype_write(struct dcf *dcf);
-int dcf_varint_write(struct dcf *dcf, struct bigint *i);
+int dcf_magic_write(struct dcf *dcf, struct crc *crc);
+int dcf_collectiontype_write(struct dcf *dcf, struct crc *crc);
+int dcf_varint_write(struct dcf *dcf, struct crc *crc, struct bigint *i);
 int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int contentsize, const char *content);
 int dcf_meta_write_final(struct dcf *dcf);
-int dcf_data_write(struct dcf *dcf, const char *buf, int size, int padsize);
-int dcf_data_write_final(struct dcf *dcf);
+int dcf_data_write_magic(struct dcf *dcf);
+int dcf_data_write(struct dcf *dcf, struct crc *crc, const char *buf, int size, int padsize);
+int dcf_data_write_final(struct dcf *dcf, struct crc *crc);
 int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, const char *sig, int sigsize);
 int dcf_signature_write_final(struct dcf *dcf);
-int dcf_crc16_write(struct dcf *dcf); /* write accumulated crc16 */
-int dcf_crc32_write(struct dcf *dcf); /* write accumulated crc16 */
+int dcf_crc16_write(struct dcf *dcf, struct crc *crc); /* write accumulated crc16 */
+int dcf_crc32_write(struct dcf *dcf, struct crc *crc); /* write accumulated crc16 */
 int dcf_recordsize_write(struct dcf *dcf); /* writes recordsize */
+int dcf_write_zeros(struct dcf *dcf, struct crc *crc, int n);

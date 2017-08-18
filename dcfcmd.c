@@ -1,9 +1,13 @@
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include "dcf.h"
+#include "crc.h"
 
 struct {
 	int collectionid;
+	int padsize;
+	int recpadsize;
 	struct {
 		char *name;
 		char *content;
@@ -14,26 +18,34 @@ int append(struct dcf *dcf)
 {
 	struct bigint version;
 	char version_v[8];
-	struct bigint collectionid;
-	char collectionid_v[8];
+	struct bigint collectionid, padsize, recpadsize;
+	char collectionid_v[8], padsize_v[8], recpadsize_v[8];
+	struct crc crc;
 	int n;
 	char buf[512];
 	
-	if(dcf_magic_write(dcf))
+	crc_init(&crc);
+	crc_push(&crc, CRC16);
+	if(dcf_magic_write(dcf, &crc))
 		return -1;
-	if(dcf_collectiontype_write(dcf))
+	if(dcf_collectiontype_write(dcf, &crc))
 		return -1;
 	
 	if(bigint_loadi(&version, version_v, sizeof(version_v), DCF_VERSION))
 		return -1;
-	if(dcf_varint_write(dcf, &version))
+	if(dcf_varint_write(dcf, &crc, &version))
 		return -1;
 	
 	if(bigint_loadi(&collectionid, collectionid_v, sizeof(collectionid_v), conf.collectionid))
 		return -1;
-	if(dcf_varint_write(dcf, &collectionid))
+	if(dcf_varint_write(dcf, &crc, &collectionid))
 		return -1;
 
+	fprintf(stderr, "dcf_crc16_write\n");
+	if(dcf_crc16_write(dcf, &crc))
+		return -1;
+	crc_pop(&crc, CRC16);
+	
 	fprintf(stderr, "dcf_meta_write\n");
 	if(dcf_meta_write(dcf, strlen(conf.meta.name), conf.meta.name, strlen(conf.meta.content), conf.meta.content))
 		return -1;
@@ -41,24 +53,42 @@ int append(struct dcf *dcf)
 	if(dcf_meta_write_final(dcf))
 		return -1;
 
-	fprintf(stderr, "dcf_hash_write\n");
-	if(dcf_hash_write(dcf, (void*)0))
+	if(bigint_loadi(&padsize, padsize_v, sizeof(padsize_v), conf.padsize))
 		return -1;
-	
+	if(dcf_varint_write(dcf, (void*)0, &padsize))
+		return -1;
+
+	if(dcf_write_zeros(dcf, (void*)0, conf.padsize))
+		return -1;
+
+	if(dcf_data_write_magic(dcf))
+		return -1;
+
+	crc_push(&crc, CRC32);
 	while((n=read(0, buf, sizeof(buf)))>0) {
-		if(dcf_data_write(dcf, buf, n, 0))
+		if(dcf_data_write(dcf, &crc, buf, n, 0))
 			return -1;
 	}
 	
-	if(dcf_data_write_final(dcf))
+	if(dcf_data_write_final(dcf, &crc))
 		return -1;
-	if(dcf_hash_write(dcf, (void*)0))
+	if(dcf_crc32_write(dcf, &crc))
 		return -1;
-	if(dcf_signature_write(dcf, "sigge", 5, "STARDUST", 8, (void*)0))
+	crc_pop(&crc, CRC32);
+
+	if(dcf_signature_write(dcf, "sigge", 5, "STARDUST", 8))
 		return -1;
 	if(dcf_signature_write_final(dcf))
 		return -1;
-	if(dcf_recordsize_write(dcf, (void*)0))
+
+	if(bigint_loadi(&recpadsize, recpadsize_v, sizeof(recpadsize_v), conf.recpadsize))
+		return -1;
+	if(dcf_varint_write(dcf, (void*)0, &recpadsize))
+		return -1;
+
+	if(dcf_write_zeros(dcf, (void*)0, conf.recpadsize))
+		return -1;
+	if(dcf_recordsize_write(dcf))
 		return -1;
 	
 	return 0;
@@ -66,9 +96,83 @@ int append(struct dcf *dcf)
 
 int list(struct dcf *dcf)
 {
+#if 0	
 	if(dcf_magic_read(dcf))
 		return -1;
+	dcf_collectiontype_read(dcf);
+
+	/* version */
+	int dcf_varint_size_read(dcf, int *size);
+	int dcf_varint_value_read(dcf, struct bigint *i, int size);
 	
+	/* collectionid */
+	int dcf_varint_size_read(dcf, int *size);
+	int dcf_varint_value_read(dcf, struct bigint *i, int size);
+	
+	/* meta */
+	{
+		/* identsize */
+		int dcf_varint_size_read(struct dcf *dcf, int *size);
+		int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+
+		/* identifier */
+		int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf);
+		
+		/* contentsize */
+		int dcf_varint_size_read(struct dcf *dcf, int *size);
+		int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+
+		/* content */
+		int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf);
+	}
+
+	/* hash so far */
+	int dcf_hash_read(struct dcf *dcf);
+	
+	/* data */
+	{
+		/* datasize */
+		int dcf_varint_size_read(struct dcf *dcf, int *size);
+                int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+
+		/* padsize */
+		int dcf_varint_size_read(struct dcf *dcf, int *size);
+                int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+		
+		/*  data */
+		int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf);
+	}
+
+	/* data hash */
+	int dcf_hash_read(struct dcf *dcf);
+
+	/* signature */
+	{
+		/* signaturetypesize */
+		int dcf_varint_size_read(struct dcf *dcf, int *size);
+                int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+
+		/* signaturetype */
+		int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf);
+
+		/* signaturesize */
+		int dcf_varint_size_read(struct dcf *dcf, int *size);
+                int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+
+		/* signature */
+		int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf);
+
+		/* sighash */
+		int dcf_hash_read(struct dcf *dcf);
+	}
+	
+	/* record size */
+	int dcf_varint_size_read(struct dcf *dcf, int *size);
+	int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+	
+	/* recordsizehash */
+	int dcf_hash_read(struct dcf *dcf);
+#endif
 	return 0;
 }
 

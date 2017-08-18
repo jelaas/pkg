@@ -222,3 +222,15 @@ int bigint_bits(const struct bigint *b)
 	}
 	return 0;
 }
+
+int bigint_nibbles(const struct bigint *b)
+{
+	int i, j, t;
+
+	for(i=b->n-1;i>=0;i--) {
+		if(b->v[i]) {
+			return i+1;
+		}
+	}
+	return 0;
+}

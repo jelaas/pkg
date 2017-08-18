@@ -2,13 +2,28 @@
  
  Distribution package file in dcf format.
 
- Collecion ids used:
+ Alignment
+ ---------
+ Padding of header and datasegments are adjusted so that all boundaries are
+ 4096 byte aligned.
+
+ Datasegment
+ -----------
+ Each datasegment has a segmentid of: [pkgid, itemid, serialnr].
+ This to allow restoration even from scrambled blocks.
+
+ Collection ids used:
  -------------------
    0 = Installable package files.
    1 = Meta-data for archive.
    2 = Build specification files
    3 = Files used to perform installation and uninstall.
    4 = Manifest of contents
+
+ Common metadata identifiers for all collections
+ --------------------------------------
+  pkgid (unique id for package)
+  itemid (unique id for item within package)
 
  Metadata identifiers used in collection 1
  -----------------------------------------

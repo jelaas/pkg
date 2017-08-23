@@ -125,6 +125,49 @@ int _bigint_sub(struct bigint *res, const struct bigint *i1, const struct bigint
 	return 0;
 }
 
+int _bigint_inc(struct bigint *b)
+{
+	int i;
+	for (i = 0; i < b->n; i++) {
+		b->v[i]++;
+		if(b->v[i] < 0x10) break;
+		b->v[i] = 0;
+	}
+	return 0;
+}
+
+int _bigint_dec(struct bigint *b)
+{
+	int i;
+	for (i = 0; i < b->n; i++) {
+		b->v[i]--;
+		if(b->v[i] >= 0x0) break;
+		b->v[i] = 0xf;
+	}
+	return 0;
+}
+
+int bigint_dec(struct bigint *b)
+{
+	if(bigint_iszero(b)) {
+		b->neg = 1;
+		return _bigint_inc(b);
+	}
+	if(b->neg) return _bigint_inc(b);
+	return _bigint_dec(b);
+}
+
+int bigint_inc(struct bigint *b)
+{
+	if(b->neg) {
+		_bigint_dec(b);
+		if(bigint_iszero(b)) {
+			b->neg = 0;
+		}
+		return 0;
+	}
+	return _bigint_inc(b);
+}
 
 int bigint_sum(struct bigint *res, const struct bigint *i1, const struct bigint *i2)
 {
@@ -225,7 +268,7 @@ int bigint_bits(const struct bigint *b)
 
 int bigint_nibbles(const struct bigint *b)
 {
-	int i, j, t;
+	int i;
 
 	for(i=b->n-1;i>=0;i--) {
 		if(b->v[i]) {

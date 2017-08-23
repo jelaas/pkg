@@ -30,7 +30,7 @@ int append(struct dcf *dcf)
 		return -1;
 	if(dcf_collectiontype_write(dcf, &crc))
 		return -1;
-	
+
 	if(bigint_loadi(&version, version_v, sizeof(version_v), DCF_VERSION))
 		return -1;
 	if(dcf_varint_write(dcf, &crc, &version))

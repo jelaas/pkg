@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <string.h>
+#include <stdio.h>
 #include "dcf.h"
 #include "bigint.h"
 
@@ -41,10 +42,10 @@ static int _dcf_write_zero(struct dcf *dcf, struct crc *crc) {
 static int _dcf_varint_size(struct dcf *dcf, struct bigint *b)
 {
 	int nibs, bytes;
-	nibs = (bigint_bits(b)+3)/4;
+	nibs = bigint_nibbles(b);
         bytes = (nibs+1)/2;
 	
-	return 1 + bytes + 1;
+	return 1 + bytes + 1 + 2;
 }
 
 int dcf_varint_write(struct dcf *dcf, struct crc *crc, struct bigint *b)
@@ -348,6 +349,8 @@ int dcf_data_write(struct dcf *dcf, struct crc *crc, const char *buf, int size, 
 
 	if(crc_write(dcf->fd, crc, buf, size) != size)
                 return -1;
+	if(bigint_loadi(&b, v, sizeof(v), size))
+		return -1;
 	if(_dcf_recordsize_inc(dcf, &b))
 		return -1;
 
@@ -458,9 +461,16 @@ int dcf_crc32_write(struct dcf *dcf, struct crc *crc)
 int dcf_pos_write(struct dcf *dcf, struct crc *crc)
 {
 	char tail_v[4];
-	int tailsizei;
+	int tailsizei, bytes;
 	struct bigint tailsize;
 	
+	{
+		int pos;
+		bigint_toint(&pos, &dcf->recordsize);
+		fprintf(stderr, "pos now %d\n", pos);
+	}
+
+	bytes = (bigint_nibbles(&dcf->recordsize)+1)/2;
 	tailsizei = _dcf_varint_size(dcf, &dcf->recordsize);
 	if(bigint_loadi(&tailsize, tail_v, sizeof(tail_v), tailsizei))
 		return -1;
@@ -468,6 +478,9 @@ int dcf_pos_write(struct dcf *dcf, struct crc *crc)
 		return -1;
 	if(bigint_sum(&dcf->temp2, &dcf->recordsize, &tailsize))
 		return -1;
+	if((bigint_nibbles(&dcf->temp2)+1)/2 != bytes)
+		bigint_inc(&dcf->temp2);
+	
 	if(dcf_varint_write(dcf, crc, &dcf->temp2))
                 return -1;
 	return 0;

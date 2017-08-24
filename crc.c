@@ -135,3 +135,11 @@ ssize_t crc_write(int fd, struct crc *crc, const void *buf, size_t count)
 	if(crc && (n > 0)) crc_update(crc, buf, n);
 	return n;
 }
+
+ssize_t crc_read(int fd, struct crc *crc, void *buf, size_t count)
+{
+	ssize_t n;
+	n = read(fd, buf, count);
+	if(crc && (n > 0)) crc_update(crc, buf, n);
+	return n;
+}

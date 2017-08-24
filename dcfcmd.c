@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include "dcf.h"
 #include "crc.h"
 
@@ -105,18 +106,43 @@ int append(struct dcf *dcf)
 
 int list(struct dcf *dcf)
 {
-#if 0	
-	if(dcf_magic_read(dcf))
+	struct crc crc;
+
+	crc_init(&crc);
+	crc_push(&crc, CRC16);
+
+	if(dcf_magic_read(dcf, &crc))
 		return -1;
-	dcf_collectiontype_read(dcf);
+
+	dcf_collectiontype_read(dcf, &crc);
 
 	/* version */
-	int dcf_varint_size_read(dcf, int *size);
-	int dcf_varint_value_read(dcf, struct bigint *i, int size);
+	{
+		int size, val;
+		char *v;
+		struct bigint version;
+		
+		if(dcf_varint_size_read(dcf, &crc, &size))
+			return -1;
+		v = malloc(size);
+		if(!v) return -1;
+		bigint_load(&version, v, size, 0);
+		if(dcf_varint_value_read(dcf, &crc, &version, size))
+			return -1;
+		if(bigint_toint(&val, &version))
+			return -1;
+		if(val != DCF_VERSION)
+			return -1;
+		free(v);
+	}
+#if 0
 	
 	/* collectionid */
 	int dcf_varint_size_read(dcf, int *size);
 	int dcf_varint_value_read(dcf, struct bigint *i, int size);
+	
+	/* hash so far */
+	int dcf_hash_read(struct dcf *dcf);
 	
 	/* meta */
 	{
@@ -135,9 +161,6 @@ int list(struct dcf *dcf)
 		int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf);
 	}
 
-	/* hash so far */
-	int dcf_hash_read(struct dcf *dcf);
-	
 	/* data */
 	{
 		/* datasize */

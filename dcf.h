@@ -47,14 +47,14 @@ struct dcf {
 int dcf_init(struct dcf *dcf, int fd, char *workbuf, int workbufsize); /* workbuf must be big enough to handle maximum recordsize of collection times three (64 bytes should be enough) */
 int dcf_collectiontype_set(struct dcf *dcf, const char *collectiontype);
 
-int dcf_magic_read(struct dcf *dcf);
-int dcf_collectiontype_read(struct dcf *dcf);
-int dcf_varint_size_read(struct dcf *dcf, int *size);
-int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
-int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf);
+int dcf_magic_read(struct dcf *dcf, struct crc *crc);
+int dcf_collectiontype_read(struct dcf *dcf, struct crc *crc);
+int dcf_varint_size_read(struct dcf *dcf, struct crc *crc, int *size);
+int dcf_varint_value_read(struct dcf *dcf, struct crc *crc, struct bigint *i, int size);
+int dcf_data_read(struct dcf *dcf, struct crc *crc, int datasize, unsigned char *buf);
 int dcf_signature_read(struct dcf *dcf, int * typesize, int *sigsize, int typebufsize, char *typebuf, int sigbufsize, unsigned char *sigbuf); /* 0 ok. 1 = no-signature. < 0 on error */
-int dcf_crc16_read(struct dcf *dcf); /* reads and checks crc16 */
-int dcf_crc32_read(struct dcf *dcf); /* reads and checks crc32 */
+int dcf_crc16_read(struct dcf *dcf, struct crc *crc); /* reads and checks crc16 */
+int dcf_crc32_read(struct dcf *dcf, struct crc *crc); /* reads and checks crc32 */
 int dcf_recordsize_read(struct dcf *dcf); /* reads and checks recordsize */
 
 int dcf_magic_write(struct dcf *dcf, struct crc *crc);

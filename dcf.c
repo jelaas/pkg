@@ -115,69 +115,81 @@ int dcf_collectiontype_set(struct dcf *dcf, const char *collectiontype)
 	memcpy(dcf->collectiontype, collectiontype, 4);
 	return 0;
 }
-#if 0
-int dcf_magic_read(struct dcf *dcf)
+
+int dcf_magic_read(struct dcf *dcf, struct crc *crc)
 {
 	unsigned char buf[6];
-	if(read(dcf->fd, buf, 6) != 6)
+	if(crc_read(dcf->fd, crc, buf, 6) != 6)
 		return -1;
-	dcf->crc32 = crc32(dcf->crc32, buf, 6);
-	dcf->crc16 = crc16(dcf->crc16, buf, 6);
 	if(_dcf_recordsize_inci(dcf, 6))
 		return -1;
 	return memcmp(DCF_MAGIC, buf, 6);
 }
 
-int dcf_collectiontype_read(struct dcf *dcf)
+int dcf_collectiontype_read(struct dcf *dcf, struct crc *crc)
 {
-	if(read(dcf->fd, dcf->collectiontype, 4) != 4)
+	if(crc_read(dcf->fd, crc, dcf->collectiontype, 4) != 4)
 		return -1;
-	dcf->crc32 = crc32(dcf->crc32, dcf->collectiontype, 4);
-	dcf->crc16 = crc16(dcf->crc16, dcf->collectiontype, 4);
 	if(_dcf_recordsize_inci(dcf, 4))
 		return -1;
 	return 0;
 }
 
-int dcf_varint_size_read(struct dcf *dcf, int *size)
+int dcf_varint_size_read(struct dcf *dcf, struct crc *crc, int *size)
 {
 	unsigned char buf[2];
-	if(read(dcf->fd, buf, 2) != 2)
+	crc_push(crc, CRC16);
+	if(crc_read(dcf->fd, crc, buf, 1) != 1)
                 return -1;
-	dcf->crc32 = crc32(dcf->crc32, buf, 2);
-	dcf->crc16 = crc16(dcf->crc16, buf, 2);
-	if(_dcf_recordsize_inci(dcf, 2))
+	if(_dcf_recordsize_inci(dcf, 1))
 		return -1;
-	*size = (hamdecode[buf[0]]<<4)|hamdecode[buf[1]];
+	*size = buf[0];
 	return 0;
 }
 
-int dcf_varint_value_read(struct dcf *dcf, struct bigint *b, int size)
+int dcf_varint_value_read(struct dcf *dcf, struct crc *crc, struct bigint *b, int size)
 {
-	int t;
 	unsigned char buf[2];
 	char *v = b->v;
-	int i = 0;
+	int i;
+	int totread = 0;
+	unsigned int crc16;
 
 	if(bigint_zero(b))
 		return -1;
-	while(size--) {
-		if(read(dcf->fd, buf, 1) != 1)
-			return -1;
-		dcf->crc32 = crc32(dcf->crc32, buf, 1);
-		dcf->crc16 = crc16(dcf->crc16, buf, 1);
-		if(i >= b->n) return -1;
-		v[i++] = hamdecode[buf[0]];
+	for(i=0;i<size;i++) {
+		if( (i & 1) == 0) {
+			if(crc_read(dcf->fd, crc, buf, 1) != 1)
+				return -1;
+			totread++;
+		}
+		v[i++] = (buf[0] & 0xf0) >> 4;
+		buf[0] <<= 4;
 	}
-	if(read(dcf->fd, buf, 2) != 2)
+	if(crc_read(dcf->fd, crc, buf, 1) != 1)
 		return -1;
-	dcf->crc32 = crc32(dcf->crc32, buf, 2);
-	dcf->crc16 = crc16(dcf->crc16, buf, 2);
-	if(((hamdecode[buf[0]]<<4)|hamdecode[buf[1]]) != size) return -1;
-	if(_dcf_recordsize_inci(dcf, size + 2))
+	totread++;
+	if(buf[0] != size) return -1;
+
+	if(crc_val(crc, &crc16, CRC16))
+		return -1;
+	if(crc_pop(crc, CRC16))
+		return -1;
+	
+	if(crc_read(dcf->fd, crc, buf, 2) != 2)
+		return -1;
+	totread += 2;
+	
+	if(buf[0] != (crc16 & 0xff00) >> 8)
+		return -1;
+	if(buf[1] != (crc16 & 0xff))
+		return -1;
+	if(_dcf_recordsize_inci(dcf, totread))
                 return -1;
 	return 0;
 }
+
+#if 0
 
 /*
  * reads data segment. meta_data_identifier, meta_data_content or data segment.

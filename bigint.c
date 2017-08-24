@@ -2,12 +2,11 @@
 #include <limits.h>
 #include "bigint.h"
 
-int bigint_load(struct bigint *b, char *v, int v_len, int negative)
+void bigint_load(struct bigint *b, char *v, int v_len, int negative)
 {
 	b->v = v;
 	b->n = v_len;
 	b->neg = negative;
-	return 0;
 }
 
 int bigint_loadi(struct bigint *b, char *v, int v_len, int intval)

@@ -35,17 +35,19 @@ static int _dcf_write_zero(struct dcf *dcf, struct crc *crc) {
 	buf[0] = 0;
 	buf[1] = 0;
 
-	crc_push(crc, CRC16);
+	if(crc) crc_push(crc, CRC16);
         if(crc_write(dcf->fd, crc, buf, 2) != 2)
                 return -1;
 	if(_dcf_recordsize_inci(dcf, 2))
 		return -1;
 	if(crc_val(crc, &crc16, CRC16))
 		return -1;
-	buf[0] = crc16 & 0xff00 >> 8;
-	buf[1] = crc16 & 0xff;
-	if(crc_pop(crc, CRC16))
-		return -1;
+	buf[0] = ((crc16 & 0xff00) >> 8);
+	buf[1] = (crc16 & 0xff);
+	if(crc) {
+		if(crc_pop(crc, CRC16))
+			return -1;
+	}
 	if(crc_write(dcf->fd, crc, buf, 2) != 2)
                 return -1;
 	if(_dcf_recordsize_inci(dcf, 2))
@@ -113,8 +115,8 @@ int dcf_varint_write(struct dcf *dcf, struct crc *crc, struct bigint *b)
 		return -1;
 	if(crc_pop(crc, CRC16))
 		return -1;
-	buf[0] = crc16 & 0xff00 >> 8;
-	buf[1] = crc16 & 0xff;
+	buf[0] = ((crc16 & 0xff00) >> 8);
+	buf[1] = (crc16 & 0xff);
 	if(crc_write(dcf->fd, crc, buf, 2) != 2)
                 return -1;
 	totwritten+=2;
@@ -186,32 +188,31 @@ int dcf_varint_value_read(struct dcf *dcf, struct crc *crc, struct bigint *b, in
 	for(i=0;i<size;i++) {
 		if( (i & 1) == 0) {
 			if(crc_read(dcf->fd, crc, buf, 1) != 1)
-				return -1;
+				return -2;
 			totread++;
 		}
 		v[i++] = (buf[0] & 0xf0) >> 4;
 		buf[0] <<= 4;
 	}
 	if(crc_read(dcf->fd, crc, buf, 1) != 1)
-		return -1;
+		return -3;
 	totread++;
-	if(buf[0] != size) return -1;
+	if(buf[0] != size) return -10;
 
 	if(crc_val(crc, &crc16, CRC16))
-		return -1;
+		return -4;
 	if(crc_pop(crc, CRC16))
-		return -1;
+		return -5;
 	
 	if(crc_read(dcf->fd, crc, buf, 2) != 2)
-		return -1;
+		return -6;
 	totread += 2;
-	
 	if(buf[0] != (crc16 & 0xff00) >> 8)
-		return -1;
+		return -7;
 	if(buf[1] != (crc16 & 0xff))
-		return -1;
+		return -8;
 	if(_dcf_recordsize_inci(dcf, totread))
-                return -1;
+                return -9;
 	return 0;
 }
 
@@ -355,7 +356,10 @@ int dcf_meta_write(struct dcf *dcf, int identsize, const char *ident, int conten
 }
 
 int dcf_meta_write_final(struct dcf *dcf) {
-	return _dcf_write_zero(dcf, (void*)0);
+	struct crc crc;
+	
+	crc_init(&crc);
+	return _dcf_write_zero(dcf, &crc);
 }
 
 int dcf_data_write(struct dcf *dcf, struct crc *crc, const char *buf, int size, int padsize)
@@ -439,7 +443,10 @@ int dcf_signature_write(struct dcf *dcf, const char *sigtype, int sigtypesize, c
 }
 
 int dcf_signature_write_final(struct dcf *dcf) {
-	return _dcf_write_zero(dcf, (void*)0);
+	struct crc crc;
+	
+	crc_init(&crc);
+	return _dcf_write_zero(dcf, &crc);
 }
 
 int dcf_data_write_final(struct dcf *dcf, struct crc *crc) {

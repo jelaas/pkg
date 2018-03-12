@@ -48,6 +48,18 @@ static int _dcf_varint_size(struct dcf *dcf, struct bigint *b)
 	return 1 + bytes + 1 + 2;
 }
 
+int dcf_uint16_write(struct dcf *dcf, struct crc *crc, unsigned int value)
+{
+	char buf[2];
+	buf[0] = (value >> 8) & 0xff;
+	buf[1] = value & 0xff;
+	if(crc_write(dcf->fd, crc, buf, 2) != 2)
+                return -1;
+        if(_dcf_recordsize_inci(dcf, 2))
+		return -1;
+        return 0;
+}
+
 int dcf_varint_write(struct dcf *dcf, struct crc *crc, struct bigint *b)
 {
 	int nibs, i, totwritten = 0;

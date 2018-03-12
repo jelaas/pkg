@@ -30,9 +30,23 @@ static int _dcf_recordsize_inci(struct dcf *dcf, int smallint)
 
 static int _dcf_write_zero(struct dcf *dcf, struct crc *crc) {
 	char buf[2];
+	unsigned int crc16;
+	
 	buf[0] = 0;
 	buf[1] = 0;
+
+	crc_push(crc, CRC16);
         if(crc_write(dcf->fd, crc, buf, 2) != 2)
+                return -1;
+	if(_dcf_recordsize_inci(dcf, 2))
+		return -1;
+	if(crc_val(crc, &crc16, CRC16))
+		return -1;
+	buf[0] = crc16 & 0xff00 >> 8;
+	buf[1] = crc16 & 0xff;
+	if(crc_pop(crc, CRC16))
+		return -1;
+	if(crc_write(dcf->fd, crc, buf, 2) != 2)
                 return -1;
 	if(_dcf_recordsize_inci(dcf, 2))
 		return -1;
@@ -97,14 +111,14 @@ int dcf_varint_write(struct dcf *dcf, struct crc *crc, struct bigint *b)
 	totwritten+=1;
 	if(crc_val(crc, &crc16, CRC16))
 		return -1;
+	if(crc_pop(crc, CRC16))
+		return -1;
 	buf[0] = crc16 & 0xff00 >> 8;
 	buf[1] = crc16 & 0xff;
-	if(write(dcf->fd, buf, 2) != 2)
+	if(crc_write(dcf->fd, crc, buf, 2) != 2)
                 return -1;
 	totwritten+=2;
 	if(_dcf_recordsize_inci(dcf, totwritten))
-		return -1;
-	if(crc_pop(crc, CRC16))
 		return -1;
 	return 0;
 }

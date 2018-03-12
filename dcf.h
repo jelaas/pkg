@@ -9,14 +9,14 @@ Record:
  VARINT collectionid This way we can multiplex records from several collections with the same collectiontype
  CRC16 headcrc
  meta: (VARINT 0|VARINT identsize, OCTETS identifier, VARINT contentsize, OCTETS content, CRC16 metaitemcrc)  Repeated until identsize is 0 which marks the end of metadata.
- VARINT padsize
+ UINT16 padsize
  OCTETS padding[<padsize>]
  OCTETS data_magic[4]
  VARINT data_section_pos. Position in octets of start of data section relative start of record.
  data: (VARINT 0|datasize, VARINT (segmentid|0), VARINT padsize, OCTETS datasegment, CRC32 datasegmentcrc). Repeated until datasize is 0 which marks the end of data. padsize is the number octets at the end of data used for padding (not actual content).
  CRC32 datacrc(data section) -- CRC32 of 'data' section
  signature: (VARINT 0|VARINT signaturetypesize, OCTETS signaturetype, VARINT signaturesize, OCTETS signature, CRC16 sigcrc). Repeated until signaturetypesize is 0.
- VARINT padsize
+ UINT16 padsize
  OCTETS padding[<padsize>]
  VARINT recordsize. Size of complete record from dcf_magic upto and including recordsize.
  
@@ -27,7 +27,7 @@ Definitions:
  INTNIBBLE = 1 nibble (4 bits).
  CRC32 = OCTETS CRC32[4] network byte order
  CRC16 = OCTETS CRC16[2] network byte order
-
+ UINT16 = Unsigned 16bit integer. 2 octets. network byte order
  */
 #include "bigint.h"
 #include "crc.h"
@@ -56,6 +56,7 @@ int dcf_signature_read(struct dcf *dcf, int * typesize, int *sigsize, int typebu
 int dcf_crc16_read(struct dcf *dcf, struct crc *crc); /* reads and checks crc16 */
 int dcf_crc32_read(struct dcf *dcf, struct crc *crc); /* reads and checks crc32 */
 int dcf_recordsize_read(struct dcf *dcf); /* reads and checks recordsize */
+unsigned int dcf_uint16_read(struct dcf *dcf, struct crc *crc);
 
 int dcf_magic_write(struct dcf *dcf, struct crc *crc);
 int dcf_collectiontype_write(struct dcf *dcf, struct crc *crc);
@@ -72,3 +73,4 @@ int dcf_crc32_write(struct dcf *dcf, struct crc *crc); /* write accumulated crc1
 int dcf_pos_write(struct dcf *dcf, struct crc *crc);
 int dcf_recordsize_write(struct dcf *dcf, struct crc *crc); /* writes recordsize */
 int dcf_write_zeros(struct dcf *dcf, struct crc *crc, int n);
+int dcf_uint16_write(struct dcf *dcf, struct crc *crc, unsigned int value);

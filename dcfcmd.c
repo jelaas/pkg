@@ -19,8 +19,8 @@ int append(struct dcf *dcf)
 {
 	struct bigint version;
 	char version_v[8];
-	struct bigint collectionid, padsize, recpadsize;
-	char collectionid_v[8], padsize_v[8], recpadsize_v[8];
+	struct bigint collectionid;
+	char collectionid_v[8];
 	struct crc crc;
 	int n;
 	char buf[512];
@@ -55,9 +55,7 @@ int append(struct dcf *dcf)
 		return -1;
 
 	fprintf(stderr, "padsize\n");
-	if(bigint_loadi(&padsize, padsize_v, sizeof(padsize_v), conf.padsize))
-		return -1;
-	if(dcf_varint_write(dcf, &crc, &padsize))
+	if(dcf_uint16_write(dcf, &crc, conf.padsize))
 		return -1;
 
 	fprintf(stderr, "padding\n");
@@ -91,9 +89,7 @@ int append(struct dcf *dcf)
 	if(dcf_signature_write_final(dcf))
 		return -1;
 
-	if(bigint_loadi(&recpadsize, recpadsize_v, sizeof(recpadsize_v), conf.recpadsize))
-		return -1;
-	if(dcf_varint_write(dcf, &crc, &recpadsize))
+	if(dcf_uint16_write(dcf, &crc, conf.recpadsize))
 		return -1;
 
 	if(dcf_write_zeros(dcf, (void*)0, conf.recpadsize))
@@ -111,10 +107,16 @@ int list(struct dcf *dcf)
 	crc_init(&crc);
 	crc_push(&crc, CRC16);
 
-	if(dcf_magic_read(dcf, &crc))
+	fprintf(stderr, "Listing\n");
+	if(dcf_magic_read(dcf, &crc)) {
+		fprintf(stderr, "Wrong magic!\n");
 		return -1;
+	}
 
-	dcf_collectiontype_read(dcf, &crc);
+	if(dcf_collectiontype_read(dcf, &crc)) {
+		fprintf(stderr, "Failed to read collection type\n");
+		return -1;
+	}
 
 	/* version */
 	{
@@ -122,8 +124,11 @@ int list(struct dcf *dcf)
 		char *v;
 		struct bigint version;
 		
-		if(dcf_varint_size_read(dcf, &crc, &size))
+		if(dcf_varint_size_read(dcf, &crc, &size)) {
+			fprintf(stderr, "Failed to read varint size of version\n");
 			return -1;
+		}
+		fprintf(stderr, "varint size of version is %d\n", size);
 		v = malloc(size);
 		if(!v) return -1;
 		bigint_load(&version, v, size, 0);
@@ -131,15 +136,31 @@ int list(struct dcf *dcf)
 			return -1;
 		if(bigint_toint(&val, &version))
 			return -1;
+		printf("dcf_versison = %d\n", val);
 		if(val != DCF_VERSION)
 			return -1;
 		free(v);
 	}
-#if 0
-	
+
 	/* collectionid */
-	int dcf_varint_size_read(dcf, int *size);
-	int dcf_varint_value_read(dcf, struct bigint *i, int size);
+	{
+		int size, val;
+                char *v;
+                struct bigint id;
+		
+		if(dcf_varint_size_read(dcf, &crc, &size))
+                        return -1;
+                v = malloc(size);
+		if(!v) return -1;
+                bigint_load(&id, v, size, 0);
+                if(dcf_varint_value_read(dcf, &crc, &id, size))
+                        return -1;
+                if(bigint_toint(&val, &id))
+			return -1;
+		printf("collectionid = %d\n", val);
+		free(v);
+	}
+#if 0
 	
 	/* hash so far */
 	int dcf_hash_read(struct dcf *dcf);
@@ -228,7 +249,8 @@ int main(int argc, char **argv)
 	if(dcf_init(&dcf, 0, v, sizeof(v)))
 		return 1;
 	
-	list(&dcf);
+	if(list(&dcf))
+		return 1;
 	
-	return 2;
+	return 0;
 }

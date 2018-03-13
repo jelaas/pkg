@@ -64,9 +64,20 @@ static int _dcf_varint_size(struct dcf *dcf, struct bigint *b)
 	return 1 + bytes + 1 + 2;
 }
 
+int dcf_uint16_read(struct dcf *dcf, struct crc *crc, unsigned int *value)
+{
+	unsigned char buf[2];
+	if(crc_read(dcf->fd, crc, buf, 2) != 2)
+		return -1;
+	if(value) *value = (buf[0] << 8) + buf[1];
+        if(_dcf_recordsize_inci(dcf, 2))
+		return -1;
+	return 0;
+}
+
 int dcf_uint16_write(struct dcf *dcf, struct crc *crc, unsigned int value)
 {
-	char buf[2];
+	unsigned char buf[2];
 	buf[0] = (value >> 8) & 0xff;
 	buf[1] = value & 0xff;
 	if(crc_write(dcf->fd, crc, buf, 2) != 2)
@@ -191,7 +202,7 @@ int dcf_varint_value_read(struct dcf *dcf, struct crc *crc, struct bigint *b, in
 				return -2;
 			totread++;
 		}
-		v[i++] = (buf[0] & 0xf0) >> 4;
+		v[i] = (buf[0] & 0xf0) >> 4;
 		buf[0] <<= 4;
 	}
 	if(crc_read(dcf->fd, crc, buf, 1) != 1)
@@ -216,42 +227,61 @@ int dcf_varint_value_read(struct dcf *dcf, struct crc *crc, struct bigint *b, in
 	return 0;
 }
 
-#if 0
+/* reads and checks crc16 */
+int dcf_crc16_read(struct dcf *dcf, struct crc *crc)
+{
+	unsigned char buf[2];
+	unsigned int crc16;
+	
+	if(crc_val(crc, &crc16, CRC16))
+		return -1;
+	if(crc_read(dcf->fd, crc, buf, 2) != 2)
+		return -3;
+	if(buf[0] != (crc16 & 0xff00) >> 8)
+		return -4;
+	if(buf[1] != (crc16 & 0xff))
+		return -5;
+	if(_dcf_recordsize_inci(dcf, 2))
+                return -6;
+	return 0;
+}
 
 /*
  * reads data segment. meta_data_identifier, meta_data_content or data segment.
  * datasize is how much to read.
  * 0 ok.
  */
-int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf)
+int dcf_data_read(struct dcf *dcf, struct crc *crc, int datasize, unsigned char *buf)
 {
-	if(read(dcf->fd, buf, datasize) != datasize)
+	size_t tot = 0;
+	ssize_t n;
+	char throwaway[64];
+
+	if(buf) {
+		while(tot < datasize) {
+			n = crc_read(dcf->fd, crc, buf+tot, datasize-tot);
+			if(n <= 0) break;
+			tot += n;
+		}
+	} else {
+		while(tot < datasize) {
+			n = crc_read(dcf->fd, crc, throwaway, datasize-tot < sizeof(throwaway)?datasize-tot:sizeof(throwaway));
+			if(n <= 0) break;
+			tot += n;
+		}
+	}
+	if(tot != datasize)
 		return -1;
-	dcf->crc32 = crc32(dcf->crc32, buf, datasize);
-	dcf->crc16 = crc16(dcf->crc16, buf, datasize);
 	if(_dcf_recordsize_inci(dcf, datasize))
-                return -1;
+                return -2;
 	return 0;
 }
+
+#if 0
 
 /* 0 ok. 1 = no-signature. < 0 on error */
 int dcf_signature_read(struct dcf *dcf, int * typesize, int *sigsize, int typebufsize, char *typebuf, int sigbufsize, unsigned char *sigbuf)
 {
-}
-
-/* reads and checks crc16 */
-int dcf_crc16_read(struct dcf *dcf)
-{
-	unsigned char buf[2];
-	if(read(dcf->fd, buf, 2) != 2)
-		return -1;
-	if(dcf->crc16 != (buf[0] << 8) + buf[1])
-		return -1;
-	dcf->crc16 = 0xffff;
-	dcf->crc32 = crc32(dcf->crc32, buf, 2);
-	if(_dcf_recordsize_inci(dcf, 2))
-                return -1;
-	return 0;
 }
 
 /* reads and checks crc32 */
@@ -458,8 +488,8 @@ int dcf_crc16_write(struct dcf *dcf, struct crc *crc)
 	unsigned char buf[2];
 	unsigned int val;
 	crc_val(crc, &val, CRC16);
-	buf[0] = val & 0xff00 >> 8;
-	buf[1] = val & 0xff;
+	buf[0] = ((val & 0xff00) >> 8);
+	buf[1] = (val & 0xff);
 	if(crc_write(dcf->fd, crc, buf, 2) != 2)
 		return -1;
 	if(_dcf_recordsize_inci(dcf, 2))

@@ -56,7 +56,7 @@ int dcf_signature_read(struct dcf *dcf, int * typesize, int *sigsize, int typebu
 int dcf_crc16_read(struct dcf *dcf, struct crc *crc); /* reads and checks crc16 */
 int dcf_crc32_read(struct dcf *dcf, struct crc *crc); /* reads and checks crc32 */
 int dcf_recordsize_read(struct dcf *dcf); /* reads and checks recordsize */
-unsigned int dcf_uint16_read(struct dcf *dcf, struct crc *crc);
+int dcf_uint16_read(struct dcf *dcf, struct crc *crc, unsigned int *value);
 
 int dcf_magic_write(struct dcf *dcf, struct crc *crc);
 int dcf_collectiontype_write(struct dcf *dcf, struct crc *crc);

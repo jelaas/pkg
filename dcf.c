@@ -277,26 +277,28 @@ int dcf_data_read(struct dcf *dcf, struct crc *crc, int datasize, unsigned char 
 	return 0;
 }
 
+/* reads and checks crc32 */
+int dcf_crc32_read(struct dcf *dcf, struct crc *crc)
+{
+	unsigned char buf[4];
+	unsigned int crc32;
+
+	if(crc_val(crc, &crc32, CRC32))
+		return -1;
+	if(crc_read(dcf->fd, crc, buf, 4) != 4)
+		return -1;
+	if(crc32 != (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3])
+		return -1;
+	if(_dcf_recordsize_inci(dcf, 4))
+                return -1;
+	return 0;
+}
+
 #if 0
 
 /* 0 ok. 1 = no-signature. < 0 on error */
 int dcf_signature_read(struct dcf *dcf, int * typesize, int *sigsize, int typebufsize, char *typebuf, int sigbufsize, unsigned char *sigbuf)
 {
-}
-
-/* reads and checks crc32 */
-int dcf_crc32_read(struct dcf *dcf)
-{
-	unsigned char buf[4];
-	if(read(dcf->fd, buf, 4) != 4)
-		return -1;
-	if(dcf->crc32 != (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3])
-		return -1;
-	dcf->crc32 = 0;
-	dcf->crc16 = crc16(dcf->crc16, buf, 4);
-	if(_dcf_recordsize_inci(dcf, 4))
-                return -1;
-	return 0;
 }
 
 /* reads and checks recordsize  */

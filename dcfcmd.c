@@ -268,12 +268,9 @@ int list(struct dcf *dcf)
 
 	/* data_section_pos. */
 	{
-		int size, pos;
+		int size, pos, rpos;
                 char *v;
                 struct bigint bi;
-
-		bigint_toint(&pos, &dcf->recordsize);
-		printf("my pos = %d\n", pos);
 
 		if(dcf_varint_size_read(dcf, &crc, &size)) {
 			fprintf(stderr, "dcf_varint_size_read failed\n");
@@ -286,42 +283,111 @@ int list(struct dcf *dcf)
 			fprintf(stderr,"dcf_varint_value_read(%d) failed\n", size);
                         return -1;
 		}
-                if(bigint_toint(&pos, &bi))
+                if(bigint_toint(&rpos, &bi))
 			return -1;
-		printf("read pos = %d\n", pos);
-		{
-			char buf[16];
-			bigint_tostr(buf, 16, &bi);
-			fprintf(stderr, "str pos = '%s'\n", buf);
-		}
+		printf("read pos = %d\n", rpos);
+		bigint_toint(&pos, &dcf->recordsize);
+		printf("my pos = %d\n", pos);
+		if(pos != rpos)
+			return -1;
 		free(v);
 	}
 
-#if 0
-
 	/* data */
-	{
+	crc_push(&crc, CRC32);
+	
+	while(1) {
+		int size, datasize, segmentid, padsize;
+                char *v;
+                struct bigint bi;
+
+		crc_push(&crc, CRC32);
+		
 		/* datasize */
-		int dcf_varint_size_read(struct dcf *dcf, int *size);
-                int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+		if(dcf_varint_size_read(dcf, &crc, &size)) {
+			fprintf(stderr, "dcf_varint_size_read failed\n");
+                        return -1;
+		}
+                v = malloc(size);
+		if(!v) return -1;
+                bigint_load(&bi, v, size, 0);
+                if(dcf_varint_value_read(dcf, &crc, &bi, size)) {
+			fprintf(stderr,"dcf_varint_value_read(%d) failed\n", size);
+                        return -1;
+		}
+                if(bigint_toint(&datasize, &bi))
+			return -1;
+		printf("datasize = %d\n", datasize);
+		free(v);
+		
+		if(datasize == 0) {
+			if(crc_pop(&crc, CRC32))
+				return -1;
+			break;
+		}
 
 		/* segmentid */
-		int dcf_varint_size_read(struct dcf *dcf, int *size);
-                int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+		if(dcf_varint_size_read(dcf, &crc, &size)) {
+			fprintf(stderr, "dcf_varint_size_read failed\n");
+                        return -1;
+		}
+                v = malloc(size);
+		if(!v) return -1;
+                bigint_load(&bi, v, size, 0);
+                if(dcf_varint_value_read(dcf, &crc, &bi, size)) {
+			fprintf(stderr,"dcf_varint_value_read(%d) failed\n", size);
+                        return -1;
+		}
+                if(bigint_toint(&segmentid, &bi))
+			return -1;
+		printf("segmentid = %d\n", segmentid);
+		free(v);
 
 		/* padsize */
-		int dcf_varint_size_read(struct dcf *dcf, int *size);
-                int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+		if(dcf_varint_size_read(dcf, &crc, &size)) {
+			fprintf(stderr, "dcf_varint_size_read failed\n");
+                        return -1;
+		}
+                v = malloc(size);
+		if(!v) return -1;
+                bigint_load(&bi, v, size, 0);
+                if(dcf_varint_value_read(dcf, &crc, &bi, size)) {
+			fprintf(stderr,"dcf_varint_value_read(%d) failed\n", size);
+                        return -1;
+		}
+                if(bigint_toint(&padsize, &bi))
+			return -1;
+		printf("padsize = %d\n", padsize);
+		free(v);
 		
-		/*  data */
-		int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf);
+		/*  datasegment */
+		{
+			unsigned char *buf;
+			buf = malloc(datasize);
+			if(dcf_data_read(dcf, &crc, datasize, buf))
+				return -1;
+			fprintf(stderr, "datasegment: '%s'\n", buf);
+			free(buf);
+		}
 
 		/* datasegmentcrc */
-		int dcf_crc32_read(struct dcf *dcf);
+		if((rc = dcf_crc32_read(dcf, &crc))) {
+			fprintf(stderr, "datasegmentcrc dcf_crc32_read failed: %d\n", rc);
+			return -1;
+		}
+		if(crc_pop(&crc, CRC32))
+			return -1;
 	}
 
 	/* datacrc */
-	int dcf_crc32_read(struct dcf *dcf);
+	if((rc = dcf_crc32_read(dcf, &crc))) {
+		fprintf(stderr, "datacrc dcf_crc32_read failed: %d\n", rc);
+		return -1;
+	}
+	if(crc_pop(&crc, CRC32))
+		return -1;
+
+#if 0
 
 	/* signature */
 	{

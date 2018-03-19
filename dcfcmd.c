@@ -111,6 +111,7 @@ int list(struct dcf *dcf)
 	struct crc crc;
 	int rc;
 
+loop:
 	crc_init(&crc);
 	crc_push(&crc, CRC16);
 
@@ -387,38 +388,109 @@ int list(struct dcf *dcf)
 	if(crc_pop(&crc, CRC32))
 		return -1;
 
-#if 0
-
 	/* signature */
-	{
+	while(1) {
+		int size;
+                char *v;
+		unsigned char *buf;
+                struct bigint b_signaturetypesize, b_signaturesize;
+		int signaturetypesize, signaturesize;
+
+		crc_push(&crc, CRC16);
+		
 		/* signaturetypesize */
-		int dcf_varint_size_read(struct dcf *dcf, int *size);
-                int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+		if(dcf_varint_size_read(dcf, &crc, &size))
+                        return -1;
+                v = malloc(size);
+		if(!v) return -1;
+                bigint_load(&b_signaturetypesize, v, size, 0);
+                if(dcf_varint_value_read(dcf, &crc, &b_signaturetypesize, size))
+                        return -1;
+                if(bigint_toint(&signaturetypesize, &b_signaturetypesize))
+			return -1;
+		printf("signaturetypesize = %d\n", signaturetypesize);
+		free(v);
+
+		if(signaturetypesize == 0) {
+			if(crc_pop(&crc, CRC16))
+				return -1;
+			break;
+		}
 
 		/* signaturetype */
-		int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf);
-
+		buf = malloc(signaturetypesize);
+		dcf_data_read(dcf, &crc, signaturetypesize, buf);
+		fprintf(stderr, "signaturetype: '%s'\n", buf);
+		
 		/* signaturesize */
-		int dcf_varint_size_read(struct dcf *dcf, int *size);
-                int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
+		if(dcf_varint_size_read(dcf, &crc, &size))
+                        return -1;
+                v = malloc(size);
+		if(!v) return -1;
+                bigint_load(&b_signaturesize, v, size, 0);
+                if(dcf_varint_value_read(dcf, &crc, &b_signaturesize, size))
+                        return -1;
+                if(bigint_toint(&signaturesize, &b_signaturesize))
+			return -1;
+		printf("signaturesize = %d\n", signaturesize);
+		free(v);
 
 		/* signature */
-		int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf);
+		buf = malloc(signaturesize);
+		if(dcf_data_read(dcf, &crc, signaturesize, buf))
+			return -1;
+		fprintf(stderr, "signature: '%s'\n", buf);
 
 		/* sigcrc */
-		int dcf_crc16_read(struct dcf *dcf);
+		if((rc = dcf_crc16_read(dcf, &crc))) {
+			fprintf(stderr, "dcf_crc16_read failed: %d\n", rc);
+			return -1;
+		}
+		if(crc_pop(&crc, CRC16))
+			return -1;
 	}
 
-	/* padsize */
-	int dcf_uint16_read(struct dcf *dcf, struct crc *crc, unsigned int value);
+
 	/* padding */
-	int dcf_data_read(struct dcf *dcf, int datasize, unsigned char *buf);
-	
-	/* record size */
-	int dcf_varint_size_read(struct dcf *dcf, int *size);
-	int dcf_varint_value_read(struct dcf *dcf, struct bigint *i, int size);
-	
-#endif
+	{
+		unsigned int val;
+		
+		/* padsize */
+		if(dcf_uint16_read(dcf, &crc, &val))
+			return -1;
+		fprintf(stderr, "padsize = %u\n", val);
+		/* padding */
+		if(dcf_data_read(dcf, &crc, val, (void*)0))
+			return -1;
+	}
+
+	{
+		int size, pos, rpos;
+                char *v;
+                struct bigint bi;
+
+		if(dcf_varint_size_read(dcf, &crc, &size)) {
+			fprintf(stderr, "dcf_varint_size_read failed\n");
+                        return -1;
+		}
+                v = malloc(size);
+		if(!v) return -1;
+                bigint_load(&bi, v, size, 0);
+                if(dcf_varint_value_read(dcf, &crc, &bi, size)) {
+			fprintf(stderr,"dcf_varint_value_read(%d) failed\n", size);
+                        return -1;
+		}
+                if(bigint_toint(&rpos, &bi))
+			return -1;
+		printf("read pos = %d\n", rpos);
+		bigint_toint(&pos, &dcf->recordsize);
+		printf("my pos = %d\n", pos);
+		if(pos != rpos)
+			return -1;
+		free(v);
+	}
+	bigint_zero(&dcf->recordsize);
+	goto loop;
 	return 0;
 }
 
